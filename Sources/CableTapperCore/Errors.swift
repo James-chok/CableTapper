@@ -12,7 +12,7 @@ public enum CableTapperError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .bluetoothNotConnected:
-            return "Not connected to the iPhone over Bluetooth. Start advertising, enable AssistiveTouch, and pair from Settings › Bluetooth."
+            return "Not connected to the iPhone over Bluetooth Classic HID. Run `cabletapper pair`, enable AssistiveTouch, and tap this Mac's name in Settings › Bluetooth."
         case .screenUnavailable(let detail):
             return "No screen frame available (\(detail)). Plug in USB, unlock the iPhone, and Trust this Mac."
         case .unsupportedCharacters(let chars):

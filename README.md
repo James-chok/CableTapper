@@ -3,10 +3,50 @@
 Headless Mac → real iPhone bridge for AI agents (Zeptap-like, no UI).
 
 - **Screen** over USB (CoreMediaIO / AVFoundation)
-- **Touch & typing** over Bluetooth HID via [BTHIDKit](https://github.com/jqssun/darwin-bt-remote) (AssistiveTouch)
+- **Touch & typing** over Bluetooth Classic HID (AssistiveTouch; SDP/report map via [BTHIDKit](https://github.com/jqssun/darwin-bt-remote))
 - **MCP** (stdio or loopback HTTP) + thin **CLI**
 
 License: **AGPL-3.0** (required by BTHIDKit). See `LICENSE` and `NOTICE`.
+
+## Architecture
+
+Nothing is installed on the iPhone. The Mac sees the screen over USB and acts as a Bluetooth keyboard/pointer; AssistiveTouch turns that pointer into on-screen taps. Agents and you drive the same core through MCP or the CLI.
+
+```mermaid
+flowchart LR
+  Agent["Cursor / Claude / Codex"] -->|"MCP stdio or HTTP"| MCP["CableTapper MCP"]
+  CLI["cabletapper CLI"] --> Core["CableTapperCore"]
+  MCP --> Core
+  subgraph core [CableTapperCore]
+    Screen["ScreenCapture"]
+    Gestures["GestureEngine"]
+    HID["HIDController"]
+    OCR["VisionOCR"]
+  end
+  Screen -->|"USB CoreMediaIO"| iPhone["iPhone"]
+  Gestures --> HID
+  HID -->|"Bluetooth Classic HID"| iPhone
+  OCR --> Screen
+```
+
+| Channel | Transport | Role |
+| --- | --- | --- |
+| Screen | USB (CoreMediaIO / AVFoundation) | Live frames, JPEG screenshots, settle detection |
+| Touch / type | Bluetooth Classic HIDP | Relative mouse + keyboard reports → AssistiveTouch |
+| Agents | Local MCP (stdio or `127.0.0.1` HTTP) | Same tools as the CLI; mutating calls return a settled screenshot when USB is up |
+
+**HID (Classic only)**
+
+Mac publishes an HID SDP record and listens for incoming L2CAP (`ClassicHIDServer`). The iPhone pairs with the **Mac’s Bluetooth name** (e.g. `James's MacBook Pro`) via `cabletapper pair`. BTHIDKit is still vendored for the shared HID profile / SDP helpers — BLE `HIDPeripheral` / `HIDCentral` are not used by CableTapper.
+
+**Layout**
+
+- `Sources/CableTapperCore` — session, capture, Classic HID, gestures, OCR, tool router
+- `Sources/CableTapper` — CLI + MCP entrypoints
+- `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote) profile/SDP pieces
+- `scripts/package-app.sh` — wrap the binary in `CableTapper.app` for Camera/Bluetooth TCC
+
+Absolute taps are mapped by tracking a soft cursor and sending relative HID moves (with a corner recalibration). Keep **one long-lived process** (`pair` / `mcp` / `smoke`) for HID; each new CLI process starts its own Bluetooth session.
 
 ## Requirements
 
@@ -14,7 +54,7 @@ License: **AGPL-3.0** (required by BTHIDKit). See `LICENSE` and `NOTICE`.
 - Xcode / Swift 6.1+
 - iPhone on a USB cable, unlocked, Trust this computer
 - AssistiveTouch enabled on the iPhone (Settings → Accessibility → Touch → AssistiveTouch)
-- Bluetooth pairing to this Mac’s CableTapper HID advertisement
+- Bluetooth Classic link to this Mac’s name (`cabletapper pair`)
 
 ## Build
 
@@ -27,7 +67,7 @@ chmod +x scripts/package-app.sh
 
 ## Pair once (iPhone — Zeptap-style)
 
-iPhone Settings will **not** show the BLE name `CableTapper` when Mac/iPhone share an Apple ID. Pair with the **Mac Bluetooth name** over Classic HID:
+Pair with the **Mac Bluetooth name** over Classic HID:
 
 ```bash
 ./scripts/package-app.sh
@@ -39,10 +79,10 @@ dist/CableTapper.app/Contents/MacOS/cabletapper pair
 Then on the iPhone:
 
 1. AssistiveTouch **On**
-2. Settings → Bluetooth → tap **`James's MacBook Pro`** (your Mac name — printed by `pair`)
+2. Settings → Bluetooth → tap your **Mac name** (printed by `pair`)
 3. Also open Mac **System Settings → Bluetooth** while pairing (helps discoverability)
 
-When the terminal prints `Classic HID connected…`, try `cabletapper click` / `type`.
+When the terminal prints `Classic HID connected…`, keep that process running and use `smoke` / `mcp` in the same session model (one long-lived HID process).
 
 Quit other Mac apps that act as a Bluetooth keyboard for that phone.
 

@@ -37,11 +37,11 @@ public final class PhoneSession {
         }
         return """
         CableTapper status:
-        bluetooth=\(s.bluetoothState) bleAdvertising=\(s.isAdvertising) bleHosts=\(s.connectedHosts) centralLinks=\(s.centralLinks)
-        classicConnected=\(s.classicConnected) classicPeer=\(s.classicPeer ?? "none") macBTName="\(s.macBluetoothName)"
+        classicConnected=\(s.classicConnected) listening=\(s.isListening) sdp=\(s.isSDPPublished)
+        classicPeer=\(s.classicPeer ?? "none") macBTName="\(s.macBluetoothName)"
         \(screenNote)
         assistiveTouch=manual (enable on iPhone)
-        note=For iPhone use: cabletapper pair → then on phone tap Mac name "\(s.macBluetoothName)" (not CableTapper)
+        note=Use: cabletapper pair → on phone tap Mac name "\(s.macBluetoothName)"
         \(s.lastError.map { "error=\($0)" } ?? "error=none")
         """
     }

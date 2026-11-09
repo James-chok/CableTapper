@@ -1,45 +1,28 @@
-import BTHIDKit
 import Foundation
 
 public struct HIDStatus: Sendable {
-    public var bluetoothState: String
-    public var isAdvertising: Bool
-    public var isServiceReady: Bool
-    public var connectedHosts: Int
-    public var centralLinks: Int
     public var classicConnected: Bool
     public var classicPeer: String?
     public var macBluetoothName: String
+    public var isListening: Bool
+    public var isSDPPublished: Bool
     public var lastError: String?
-    public var advertisedName: String
-}
-
-public struct NearbyDevice: Sendable, Identifiable {
-    public var id: UUID
-    public var name: String
-    public var rssi: Int
-    public var isNamed: Bool
 }
 
 @MainActor
 public final class HIDController {
     public let profile: ComboProfile
-    public let peripheral: HIDPeripheral
-    public let central: HIDCentral
     public let classic: ClassicHIDServer
 
     public init(advertisedName: String = "CableTapper") {
         let profile = ComboProfile(advertisedName: advertisedName)
         self.profile = profile
-        peripheral = HIDPeripheral(profile: profile)
-        peripheral.advertisedName = advertisedName
-        central = HIDCentral()
         classic = ClassicHIDServer(profile: profile)
     }
 
+    /// Start Classic HID pairing window (SDP + discoverable + incoming L2CAP).
     public func start() {
-        peripheral.start()
-        central.start()
+        classic.startPairingWindow()
     }
 
     public func startClassicPairing() {
@@ -47,63 +30,22 @@ public final class HIDController {
     }
 
     public func stop() {
-        peripheral.stop()
-        central.stopScan()
         classic.stop()
     }
 
     public var isConnected: Bool {
-        if classic.isConnected { return true }
-        let hostSubscribed = peripheral.connectedCentrals.contains { !peripheral.inactiveCentrals.contains($0) }
-        return hostSubscribed || !central.connected.isEmpty
+        classic.isConnected
     }
 
     public var status: HIDStatus {
         HIDStatus(
-            bluetoothState: String(describing: peripheral.state),
-            isAdvertising: peripheral.isAdvertising,
-            isServiceReady: peripheral.isHIDServiceAdded,
-            connectedHosts: peripheral.connectedCentrals.filter { !peripheral.inactiveCentrals.contains($0) }.count,
-            centralLinks: central.connected.count,
             classicConnected: classic.isConnected,
             classicPeer: classic.peerName ?? classic.peerAddress,
             macBluetoothName: classic.macBluetoothName,
-            lastError: classic.lastError ?? peripheral.lastError ?? central.lastError,
-            advertisedName: peripheral.localName
+            isListening: classic.isListening,
+            isSDPPublished: classic.isSDPPublished,
+            lastError: classic.lastError
         )
-    }
-
-    public func startScan() {
-        central.start()
-        central.startScan()
-    }
-
-    public func stopScan() {
-        central.stopScan()
-    }
-
-    public var nearbyDevices: [NearbyDevice] {
-        central.discovered.map {
-            NearbyDevice(id: $0.id, name: $0.name, rssi: $0.rssi, isNamed: $0.isNamed)
-        }
-    }
-
-    public func connect(to id: UUID) {
-        central.connect(id)
-    }
-
-    public func connect(matching query: String) throws -> NearbyDevice {
-        let q = query.lowercased()
-        let matches = nearbyDevices.filter {
-            $0.name.lowercased().contains(q) || $0.id.uuidString.lowercased().hasPrefix(q)
-        }
-        guard let first = matches.first else {
-            throw CableTapperError.internalError(
-                "No nearby BLE device matching \"\(query)\". For iPhone, use `cabletapper pair` and tap your Mac name (\(classic.macBluetoothName)) in Settings › Bluetooth."
-            )
-        }
-        central.connect(first.id)
-        return first
     }
 
     public func sendMouse(_ report: MouseReport) {
@@ -119,11 +61,7 @@ public final class HIDController {
     }
 
     private func send(_ id: UInt8, _ data: Data) {
-        if classic.isConnected {
-            classic.send(reportID: id, payload: data)
-        } else {
-            peripheral.send(id, data)
-        }
+        classic.send(reportID: id, payload: data)
     }
 
     public func moveBy(dx: Int8, dy: Int8) {
