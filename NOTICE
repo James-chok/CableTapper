@@ -1,0 +1,9 @@
+CableTapper includes BTHIDKit from:
+
+  https://github.com/jqssun/darwin-bt-remote
+
+Licensed under the GNU Affero General Public License v3.0.
+The vendored copy lives in Vendor/BTHIDKit/.
+
+HID report descriptors and Combo-style identity packing are adapted from
+that project's BTRemote sources under the same AGPL-3.0 terms.
