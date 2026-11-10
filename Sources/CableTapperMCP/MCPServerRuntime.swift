@@ -1,15 +1,24 @@
 import CableTapperCore
 import Foundation
-import Logging
 import MCP
 import Network
 
-enum MCPServerRuntime {
+public enum MCPServerRuntime {
+    public static let defaultHost = "127.0.0.1"
+    public static let defaultPort = 47801
+    public static var endpointURL: String {
+        "http://\(defaultHost):\(defaultPort)/mcp"
+    }
+
+    /// Starts loopback MCP and parks until cancelled. `onListening` runs on the main actor once the port is bound.
     @MainActor
-    static func run(session: PhoneSession, stdio: Bool, host: String, port: Int) async throws {
+    public static func run(
+        session: PhoneSession,
+        host: String = defaultHost,
+        port: Int = defaultPort,
+        onListening: (@MainActor () -> Void)? = nil
+    ) async throws {
         session.startHID()
-        // Best-effort screen start; tools can retry.
-        try? await session.startScreen()
 
         let router = ToolRouter(session: session)
         let server = Server(
@@ -28,20 +37,18 @@ enum MCPServerRuntime {
             return Self.toMCP(toolResult)
         }
 
-        if stdio {
-            FileHandle.standardError.write(Data("cabletapper mcp stdio ready\n".utf8))
-            let transport = StdioTransport()
-            try await server.start(transport: transport)
-            await server.waitUntilCompleted()
-            return
-        }
-
         let transport = StatelessHTTPServerTransport()
         try await server.start(transport: transport)
-        FileHandle.standardError.write(
-            Data("cabletapper mcp http://\(host):\(port)/mcp (loopback)\n".utf8)
-        )
-        try await LoopbackHTTPServer(host: host, port: UInt16(port), transport: transport).run()
+        let http = LoopbackHTTPServer(host: host, port: UInt16(port), transport: transport)
+        try await http.start()
+        FileHandle.standardError.write(Data("cabletapper mcp \(endpointURL) (loopback)\n".utf8))
+        onListening?()
+        // USB capture can take several seconds. Do not hold the listener behind it.
+        let screen = Task { @MainActor in
+            try? await session.startScreen()
+        }
+        try await http.park()
+        screen.cancel()
     }
 
     private nonisolated static func mapArguments(_ arguments: [String: Value]?) -> [String: ToolValue] {
@@ -204,6 +211,36 @@ enum MCPServerRuntime {
     }
 }
 
+/// Resumes the bind continuation exactly once from the listener's state callback.
+private final class ListenerReady: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    init(_ continuation: CheckedContinuation<Void, Error>) {
+        self.continuation = continuation
+    }
+
+    func handle(_ state: NWListener.State) {
+        let resume: (() -> Void)? = lock.withLock {
+            guard let continuation else { return nil }
+            switch state {
+            case .ready:
+                self.continuation = nil
+                return { continuation.resume() }
+            case .failed(let error):
+                self.continuation = nil
+                return { continuation.resume(throwing: error) }
+            case .cancelled:
+                self.continuation = nil
+                return { continuation.resume(throwing: CancellationError()) }
+            default:
+                return nil
+            }
+        }
+        resume?()
+    }
+}
+
 /// Minimal loopback HTTP/1.1 server bridging to StatelessHTTPServerTransport.
 actor LoopbackHTTPServer {
     private let host: String
@@ -216,16 +253,44 @@ actor LoopbackHTTPServer {
         self.transport = transport
     }
 
-    func run() async throws {
+    private var listener: NWListener?
+
+    /// Binds the port and returns when the listener is ready.
+    func start() async throws {
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            throw CableTapperError.internalError("Invalid HTTP port \(port)")
+        }
+
+        // Bind via either `requiredLocalEndpoint` OR `on:` — never both.
+        // Combining them returns POSIX EINVAL (22) on recent macOS.
         let params = NWParameters.tcp
-        let nwPort = NWEndpoint.Port(rawValue: port)!
-        params.requiredLocalEndpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: nwPort)
-        let listener = try NWListener(using: params, on: nwPort)
+        params.allowLocalEndpointReuse = true
+        let listener: NWListener
+        if let ipv4 = IPv4Address(host) {
+            params.requiredLocalEndpoint = .hostPort(host: .ipv4(ipv4), port: nwPort)
+            listener = try NWListener(using: params)
+        } else if let ipv6 = IPv6Address(host) {
+            params.requiredLocalEndpoint = .hostPort(host: .ipv6(ipv6), port: nwPort)
+            listener = try NWListener(using: params)
+        } else {
+            listener = try NWListener(using: params, on: nwPort)
+        }
+
         listener.newConnectionHandler = { connection in
             Task { await self.handle(connection) }
         }
-        listener.start(queue: .global())
-        // Park forever.
+        self.listener = listener
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            let gate = ListenerReady(cont)
+            listener.stateUpdateHandler = { state in
+                gate.handle(state)
+            }
+            listener.start(queue: .global())
+        }
+    }
+
+    func park() async throws {
         try await Task.sleep(for: .seconds(60 * 60 * 24 * 365 * 100))
     }
 

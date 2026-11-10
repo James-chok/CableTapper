@@ -5,14 +5,12 @@ let package = Package(
     name: "CableTapper",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "cabletapper", targets: ["CableTapper"]),
         .library(name: "CableTapperCore", targets: ["CableTapperCore"]),
+        .library(name: "CableTapperMCP", targets: ["CableTapperMCP"]),
     ],
     dependencies: [
         .package(path: "Vendor/BTHIDKit"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
-        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     ],
     targets: [
         .target(
@@ -21,13 +19,11 @@ let package = Package(
                 .product(name: "BTHIDKit", package: "BTHIDKit"),
             ]
         ),
-        .executableTarget(
-            name: "CableTapper",
+        .target(
+            name: "CableTapperMCP",
             dependencies: [
                 "CableTapperCore",
                 .product(name: "MCP", package: "swift-sdk"),
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "Logging", package: "swift-log"),
             ]
         ),
     ]

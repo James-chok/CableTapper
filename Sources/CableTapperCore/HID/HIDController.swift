@@ -1,50 +1,50 @@
+import BTHIDKit
 import Foundation
 
 public struct HIDStatus: Sendable {
-    public var classicConnected: Bool
-    public var classicPeer: String?
-    public var macBluetoothName: String
-    public var isListening: Bool
-    public var isSDPPublished: Bool
+    public var bluetoothState: String
+    public var isAdvertising: Bool
+    public var isServiceReady: Bool
+    public var connectedHosts: Int
+    public var advertisedName: String
     public var lastError: String?
 }
 
+/// BLE HOGP controller (darwin-bt-remote / BTHIDKit LowEnergy path).
+/// Mac advertises as a HID keyboard/mouse; the iPhone joins as HID host.
 @MainActor
 public final class HIDController {
     public let profile: ComboProfile
-    public let classic: ClassicHIDServer
+    public let peripheral: HIDPeripheral
 
     public init(advertisedName: String = "CableTapper") {
         let profile = ComboProfile(advertisedName: advertisedName)
         self.profile = profile
-        classic = ClassicHIDServer(profile: profile)
+        peripheral = HIDPeripheral(profile: profile)
+        peripheral.advertisedName = advertisedName
     }
 
-    /// Start Classic HID pairing window (SDP + discoverable + incoming L2CAP).
+    /// Start BLE HID advertising.
     public func start() {
-        classic.startPairingWindow()
-    }
-
-    public func startClassicPairing() {
-        classic.startPairingWindow()
+        peripheral.start()
     }
 
     public func stop() {
-        classic.stop()
+        peripheral.stop()
     }
 
     public var isConnected: Bool {
-        classic.isConnected
+        peripheral.connectedCentrals.contains { !peripheral.inactiveCentrals.contains($0) }
     }
 
     public var status: HIDStatus {
         HIDStatus(
-            classicConnected: classic.isConnected,
-            classicPeer: classic.peerName ?? classic.peerAddress,
-            macBluetoothName: classic.macBluetoothName,
-            isListening: classic.isListening,
-            isSDPPublished: classic.isSDPPublished,
-            lastError: classic.lastError
+            bluetoothState: peripheral.state.description,
+            isAdvertising: peripheral.isAdvertising,
+            isServiceReady: peripheral.isHIDServiceAdded,
+            connectedHosts: peripheral.connectedCentrals.filter { !peripheral.inactiveCentrals.contains($0) }.count,
+            advertisedName: peripheral.localName,
+            lastError: peripheral.lastError
         )
     }
 
@@ -61,7 +61,7 @@ public final class HIDController {
     }
 
     private func send(_ id: UInt8, _ data: Data) {
-        classic.send(reportID: id, payload: data)
+        peripheral.send(id, data)
     }
 
     public func moveBy(dx: Int8, dy: Int8) {

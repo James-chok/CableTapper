@@ -1,22 +1,22 @@
 # CableTapper
 
-Headless Mac → real iPhone bridge for AI agents (Zeptap-like, no UI).
+Mac → real iPhone bridge for AI agents (Zeptap-like).
 
 - **Screen** over USB (CoreMediaIO / AVFoundation)
-- **Touch & typing** over Bluetooth Classic HID (AssistiveTouch; SDP/report map via [BTHIDKit](https://github.com/jqssun/darwin-bt-remote))
-- **MCP** (stdio or loopback HTTP) + thin **CLI**
+- **Touch & typing** over Bluetooth LE HID / HOGP (AssistiveTouch; via [BTHIDKit](https://github.com/jqssun/darwin-bt-remote))
+- **MCP** on loopback HTTP, started by the app
+- A small **SwiftUI** window to advertise and show connected hosts
 
 License: **AGPL-3.0** (required by BTHIDKit). See `LICENSE` and `NOTICE`.
 
 ## Architecture
 
-Nothing is installed on the iPhone. The Mac sees the screen over USB and acts as a Bluetooth keyboard/pointer; AssistiveTouch turns that pointer into on-screen taps. Agents and you drive the same core through MCP or the CLI.
+Nothing is installed on the iPhone. Open **CableTapper.app**. It advertises as a Bluetooth keyboard/pointer, serves MCP at `http://127.0.0.1:47801/mcp`, and shows a window for BLE advertising and connected hosts. Agents use the same process through MCP.
 
 ```mermaid
 flowchart LR
-  Agent["Cursor / Claude / Codex"] -->|"MCP stdio or HTTP"| MCP["CableTapper MCP"]
-  CLI["cabletapper CLI"] --> Core["CableTapperCore"]
-  MCP --> Core
+  Agent["Cursor / Claude / Codex"] -->|"MCP HTTP"| App["CableTapper.app"]
+  App --> Core["CableTapperCore"]
   subgraph core [CableTapperCore]
     Screen["ScreenCapture"]
     Gestures["GestureEngine"]
@@ -25,28 +25,25 @@ flowchart LR
   end
   Screen -->|"USB CoreMediaIO"| iPhone["iPhone"]
   Gestures --> HID
-  HID -->|"Bluetooth Classic HID"| iPhone
+  HID -->|"BLE HOGP"| iPhone
   OCR --> Screen
 ```
 
 | Channel | Transport | Role |
 | --- | --- | --- |
 | Screen | USB (CoreMediaIO / AVFoundation) | Live frames, JPEG screenshots, settle detection |
-| Touch / type | Bluetooth Classic HIDP | Relative mouse + keyboard reports → AssistiveTouch |
-| Agents | Local MCP (stdio or `127.0.0.1` HTTP) | Same tools as the CLI; mutating calls return a settled screenshot when USB is up |
-
-**HID (Classic only)**
-
-Mac publishes an HID SDP record and listens for incoming L2CAP (`ClassicHIDServer`). The iPhone pairs with the **Mac’s Bluetooth name** (e.g. `James's MacBook Pro`) via `cabletapper pair`. BTHIDKit is still vendored for the shared HID profile / SDP helpers — BLE `HIDPeripheral` / `HIDCentral` are not used by CableTapper.
+| Touch / type | Bluetooth LE HID over GATT (HOGP) | Relative mouse + keyboard reports → AssistiveTouch |
+| Agents | Local MCP (`127.0.0.1:47801/mcp`) | Tools in the running app; mutating calls return a settled screenshot when USB is up |
 
 **Layout**
 
-- `Sources/CableTapperCore` — session, capture, Classic HID, gestures, OCR, tool router
-- `Sources/CableTapper` — CLI + MCP entrypoints
-- `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote) profile/SDP pieces
-- `scripts/package-app.sh` — wrap the binary in `CableTapper.app` for Camera/Bluetooth TCC
+- `CableTapper.xcodeproj` — macOS app (debug and release)
+- `Sources/CableTapperApp` — SwiftUI window
+- `Sources/CableTapperMCP` — loopback MCP server
+- `Sources/CableTapperCore` — session, capture, BLE HID, gestures, OCR, tool router
+- `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote)
 
-Absolute taps are mapped by tracking a soft cursor and sending relative HID moves (with a corner recalibration). Keep **one long-lived process** (`pair` / `mcp` / `smoke`) for HID; each new CLI process starts its own Bluetooth session.
+Absolute taps are mapped by tracking a soft cursor and sending relative HID moves (with a corner recalibration). Keep this one app running; it owns the Bluetooth session and the MCP listener.
 
 ## Requirements
 
@@ -54,70 +51,29 @@ Absolute taps are mapped by tracking a soft cursor and sending relative HID move
 - Xcode / Swift 6.1+
 - iPhone on a USB cable, unlocked, Trust this computer
 - AssistiveTouch enabled on the iPhone (Settings → Accessibility → Touch → AssistiveTouch)
-- Bluetooth Classic link to this Mac’s name (`cabletapper pair`)
 
-## Build
+## Run
 
-```bash
-swift build
-# or package a .app so Camera/Bluetooth TCC prompts work reliably:
-chmod +x scripts/package-app.sh
-./scripts/package-app.sh
-```
+Open `CableTapper.xcodeproj` and Run. Xcode builds `CableTapper.app`. Archive that same target to release.
 
-## Pair once (iPhone — Zeptap-style)
+The window starts BLE advertising as **CableTapper**, lists connected hosts, and binds MCP.
 
-Pair with the **Mac Bluetooth name** over Classic HID:
-
-```bash
-./scripts/package-app.sh
-
-# keep running
-dist/CableTapper.app/Contents/MacOS/cabletapper pair
-```
-
-Then on the iPhone:
+On the iPhone:
 
 1. AssistiveTouch **On**
-2. Settings → Bluetooth → tap your **Mac name** (printed by `pair`)
-3. Also open Mac **System Settings → Bluetooth** while pairing (helps discoverability)
-
-When the terminal prints `Classic HID connected…`, keep that process running and use `smoke` / `mcp` in the same session model (one long-lived HID process).
+2. Settings → Bluetooth → tap **CableTapper**
 
 Quit other Mac apps that act as a Bluetooth keyboard for that phone.
 
-## CLI
-
-```bash
-cabletapper status
-cabletapper screenshot                  # → ./screenshots/screenshot-*.jpg
-cabletapper screenshot -o screenshots/phone.jpg
-cabletapper tap 120 640
-cabletapper type "hello"
-cabletapper find-text Settings
-cabletapper home
-cabletapper open-app Settings
-```
-
 ## MCP
 
-```bash
-# stdio (Claude Code / Cursor)
-cabletapper mcp --stdio
-
-# loopback HTTP (Zeptap-shaped URL)
-cabletapper mcp --http --port 47801
-# → http://127.0.0.1:47801/mcp
-```
-
-Example Cursor / Claude MCP config (stdio):
+The app listens on `http://127.0.0.1:47801/mcp` while it is open.
 
 ```json
 {
   "mcpServers": {
     "cabletapper": {
-      "command": "/absolute/path/to/cabletapper",
-      "args": ["mcp", "--stdio"]
+      "url": "http://127.0.0.1:47801/mcp"
     }
   }
 }
@@ -131,6 +87,5 @@ Coordinates are screenshot pixels (origin top-left). Mutating tools return a set
 
 ## Notes
 
-- Camera + Bluetooth permission prompts are more reliable when running the packaged `.app`.
 - Absolute taps use relative HID mouse moves + AssistiveTouch; first tap recalibrates via the top-left corner.
 - Auto-enabling AssistiveTouch over USB lockdown is deferred.
