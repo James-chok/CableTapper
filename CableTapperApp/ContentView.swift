@@ -15,7 +15,7 @@ struct ContentView: View {
                 mcpSection
             }
             .formStyle(.grouped)
-            .navigationTitle("CableTapper")
+            .navigationTitle("Cable Tapper")
         }
         .onAppear { startNameScan() }
         .onChange(of: central.state) { _, _ in startNameScan() }
