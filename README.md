@@ -38,7 +38,7 @@ flowchart LR
 **Layout**
 
 - `CableTapper.xcodeproj` — macOS app (debug and release)
-- `Sources/CableTapperApp` — SwiftUI window
+- `CableTapperApp` — SwiftUI window
 - `Sources/CableTapperMCP` — loopback MCP server
 - `Sources/CableTapperCore` — session, capture, BLE HID, gestures, OCR, tool router
 - `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote)

@@ -37,18 +37,18 @@
 		A10000000000000000000009 = {
 			isa = PBXGroup;
 			children = (
-				A1000000000000000000000A /* Sources/CableTapperApp */,
+				A1000000000000000000000A /* CableTapperApp */,
 				A1000000000000000000000B /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		A1000000000000000000000A /* Sources/CableTapperApp */ = {
+		A1000000000000000000000A /* CableTapperApp */ = {
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000005 /* CableTapperApp.swift */,
 				A10000000000000000000006 /* ContentView.swift */,
 			);
-			path = Sources/CableTapperApp;
+			path = CableTapperApp;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000000B /* Products */ = {
