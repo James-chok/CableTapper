@@ -101,15 +101,21 @@ public final class GestureEngine {
 
     public func home() async throws {
         try requireBluetooth()
-        // GUI+H is not universal on iOS; use consumer AC Home when available, else Spotlight dismiss + many homes via consumer.
-        await hid.consumerTap(.acHome)
+        // Start must sit in the home-indicator strip, and iOS ignores a press right after the pointer arrives.
+        let x = pointer.width * 0.5
+        let fromY = max(pointer.height - 22, 0)
+        try await moveTo(x: x, y: fromY)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        try await drag(fromX: x, fromY: fromY, toX: x, toY: pointer.height * 0.24, durationMs: 250)
     }
 
     public func back() async throws {
         try requireBluetooth()
-        // Edge swipe from left as AssistiveTouch drag.
+        // Back is a horizontal swipe that starts on the left column of pixels.
         let y = pointer.height * 0.5
-        try await drag(fromX: 2, fromY: y, toX: pointer.width * 0.45, toY: y, durationMs: 350)
+        try await moveTo(x: 0, y: y)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        try await drag(fromX: 0, fromY: y, toX: pointer.width * 0.7, toY: y, durationMs: 300)
     }
 
     private func place(x: Double, y: Double) {
