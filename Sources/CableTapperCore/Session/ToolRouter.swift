@@ -18,7 +18,7 @@ public final class ToolRouter {
     public func call(_ call: ToolCall) async -> ToolResult {
         switch call.name {
         case "status":
-            return .ok(session.statusText())
+            return .ok(self.session.statusText())
         case "screenshot":
             return await screenshot()
         case "wait":
@@ -55,23 +55,23 @@ public final class ToolRouter {
         case "press_key":
             return await pressKey(args: call.arguments)
         case "home":
-            return await session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "home") {
-                try await session.gestures.home()
+            return await self.session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "home") {
+                try await self.session.gestures.home()
             }
         case "back":
-            return await session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "back") {
-                try await session.gestures.back()
+            return await self.session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "back") {
+                try await self.session.gestures.back()
             }
         case "dismiss":
-            return await session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "dismiss") {
-                try await session.gestures.dismiss()
+            return await self.session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "dismiss") {
+                try await self.session.gestures.dismiss()
             }
         case "open_app":
             guard let name = call.arguments["name"]?.stringValue, !name.isEmpty else {
                 return .fail("Missing name")
             }
-            return await session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "open_app \(name)") {
-                try await session.gestures.openApp(named: name)
+            return await self.session.withSettledScreenshot(settleMs: call.arguments["settle_ms"]?.intValue, actionNote: "open_app \(name)") {
+                try await self.session.gestures.openApp(named: name)
             }
         default:
             return .fail("Unknown tool: \(call.name)")
@@ -80,9 +80,9 @@ public final class ToolRouter {
 
     private func screenshot() async -> ToolResult {
         do {
-            try await session.startScreen()
-            let shot = try await session.screen.waitForSettle(timeoutMs: session.defaultSettleMs)
-            session.gestures.updateScreenSize(width: shot.width, height: shot.height)
+            try await self.session.startScreen()
+            let shot = try await self.session.screen.waitForSettle(timeoutMs: self.session.defaultSettleMs)
+            self.session.gestures.updateScreenSize(width: shot.width, height: shot.height)
             let settleNote = shot.settled ? "screen settled" : "screen still moving"
             return .ok("Screenshot \(shot.width)x\(shot.height) px. \(settleNote).", jpeg: shot.jpegData)
         } catch {
@@ -98,12 +98,12 @@ public final class ToolRouter {
 
     private func findText(query: String?, exact: Bool) async -> ToolResult {
         do {
-            try await session.startScreen()
-            guard let image = session.screen.currentCGImage() else {
+            try await self.session.startScreen()
+            guard let image = self.session.screen.currentCGImage() else {
                 throw CableTapperError.screenUnavailable("no frame")
             }
             let lines = try await VisionOCR.recognize(in: image, query: query, exact: exact)
-            let size = session.screen.frameSize
+            let size = self.session.screen.frameSize
             var out = "screenshot \(size.width)x\(size.height), \(lines.count) lines:\n"
             for line in lines {
                 out += "\"\(line.text)\" center=(\(line.centerX),\(line.centerY)) box=(\(line.boxX),\(line.boxY),\(line.boxW),\(line.boxH))\n"
@@ -116,17 +116,17 @@ public final class ToolRouter {
 
     private func tap(x: Int?, y: Int?, settleMs: Int?) async -> ToolResult {
         guard let x, let y else { return .fail("tap requires x and y") }
-        return await session.withSettledScreenshot(settleMs: settleMs, actionNote: "tap (\(x),\(y))") {
-            try await session.startScreen()
-            try await session.gestures.tap(x: Double(x), y: Double(y))
+        return await self.session.withSettledScreenshot(settleMs: settleMs, actionNote: "tap (\(x),\(y))") {
+            try await self.session.startScreen()
+            try await self.session.gestures.tap(x: Double(x), y: Double(y))
         }
     }
 
     private func tapText(text: String?, exact: Bool, index: Int, settleMs: Int?) async -> ToolResult {
         guard let text, !text.isEmpty else { return .fail("tap_text requires text") }
         do {
-            try await session.startScreen()
-            guard let image = session.screen.currentCGImage() else {
+            try await self.session.startScreen()
+            guard let image = self.session.screen.currentCGImage() else {
                 throw CableTapperError.screenUnavailable("no frame")
             }
             let lines = try await VisionOCR.recognize(in: image, query: text, exact: exact)
@@ -134,26 +134,26 @@ public final class ToolRouter {
                 throw CableTapperError.textNotFound(text)
             }
             let line = lines[index]
-            return await session.withSettledScreenshot(settleMs: settleMs, actionNote: "tap_text \"\(line.text)\"") {
-                try await session.gestures.tap(x: Double(line.centerX), y: Double(line.centerY))
+            return await self.session.withSettledScreenshot(settleMs: settleMs, actionNote: "tap_text \"\(line.text)\"") {
+                try await self.session.gestures.tap(x: Double(line.centerX), y: Double(line.centerY))
             }
         } catch {
-            let jpeg = try? session.screen.captureJPEG().jpegData
+            let jpeg = try? self.session.screen.captureJPEG().jpegData
             return .fail(error.localizedDescription, jpeg: jpeg)
         }
     }
 
     private func doubleTap(x: Int?, y: Int?, settleMs: Int?) async -> ToolResult {
         guard let x, let y else { return .fail("double_tap requires x and y") }
-        return await session.withSettledScreenshot(settleMs: settleMs, actionNote: "double_tap (\(x),\(y))") {
-            try await session.gestures.doubleTap(x: Double(x), y: Double(y))
+        return await self.session.withSettledScreenshot(settleMs: settleMs, actionNote: "double_tap (\(x),\(y))") {
+            try await self.session.gestures.doubleTap(x: Double(x), y: Double(y))
         }
     }
 
     private func longPress(x: Int?, y: Int?, durationMs: Int, settleMs: Int?) async -> ToolResult {
         guard let x, let y else { return .fail("long_press requires x and y") }
-        return await session.withSettledScreenshot(settleMs: settleMs, actionNote: "long_press (\(x),\(y)) \(durationMs)ms") {
-            try await session.gestures.longPress(x: Double(x), y: Double(y), durationMs: durationMs)
+        return await self.session.withSettledScreenshot(settleMs: settleMs, actionNote: "long_press (\(x),\(y)) \(durationMs)ms") {
+            try await self.session.gestures.longPress(x: Double(x), y: Double(y), durationMs: durationMs)
         }
     }
 
@@ -167,8 +167,8 @@ public final class ToolRouter {
             return .fail("drag requires from_x, from_y, to_x, to_y")
         }
         let duration = args["duration_ms"]?.intValue ?? 800
-        return await session.withSettledScreenshot(settleMs: args["settle_ms"]?.intValue, actionNote: "drag (\(fromX),\(fromY))->(\(toX),\(toY))") {
-            try await session.gestures.drag(
+        return await self.session.withSettledScreenshot(settleMs: args["settle_ms"]?.intValue, actionNote: "drag (\(fromX),\(fromY))->(\(toX),\(toY))") {
+            try await self.session.gestures.drag(
                 fromX: Double(fromX),
                 fromY: Double(fromY),
                 toX: Double(toX),
@@ -185,16 +185,16 @@ public final class ToolRouter {
         guard let dirRaw = args["direction"]?.stringValue, let direction = FlickDirection(rawValue: dirRaw) else {
             return .fail("flick requires direction up|down|left|right")
         }
-        return await session.withSettledScreenshot(settleMs: args["settle_ms"]?.intValue, actionNote: "flick \(dirRaw) from (\(x),\(y))") {
-            try await session.gestures.flick(x: Double(x), y: Double(y), direction: direction)
+        return await self.session.withSettledScreenshot(settleMs: args["settle_ms"]?.intValue, actionNote: "flick \(dirRaw) from (\(x),\(y))") {
+            try await self.session.gestures.flick(x: Double(x), y: Double(y), direction: direction)
         }
     }
 
     private func typeText(_ text: String?, settleMs: Int?) async -> ToolResult {
         guard let text else { return .fail("type_text requires text") }
-        return await session.withSettledScreenshot(settleMs: settleMs, actionNote: "type_text") {
-            try session.gestures.requireBluetooth()
-            try await session.hid.typeASCII(text)
+        return await self.session.withSettledScreenshot(settleMs: settleMs, actionNote: "type_text") {
+            try self.session.gestures.requireBluetooth()
+            try await self.session.hid.typeASCII(text)
         }
     }
 
@@ -205,10 +205,10 @@ public final class ToolRouter {
         guard let key = mapKeyName(keyName) else {
             return .fail("Unsupported key: \(keyName)")
         }
-        return await session.withSettledScreenshot(settleMs: args["settle_ms"]?.intValue, actionNote: "press_key \(keyName)") {
-            try session.gestures.requireBluetooth()
+        return await self.session.withSettledScreenshot(settleMs: args["settle_ms"]?.intValue, actionNote: "press_key \(keyName)") {
+            try self.session.gestures.requireBluetooth()
             for _ in 0 ..< repeatCount {
-                await session.hid.tapKey(key, modifiers: modifiers)
+                await self.session.hid.tapKey(key, modifiers: modifiers)
                 try? await Task.sleep(nanoseconds: 30_000_000)
             }
         }

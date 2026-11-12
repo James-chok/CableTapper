@@ -17,6 +17,10 @@ public final class HIDController {
     public let profile: ComboProfile
     public let peripheral: HIDPeripheral
 
+    private var pointerX: UInt16 = 0
+    private var pointerY: UInt16 = 0
+    private var heldButtons: MouseButtons = []
+
     public init(advertisedName: String = "CableTapper") {
         let profile = ComboProfile(advertisedName: advertisedName)
         self.profile = profile
@@ -64,22 +68,31 @@ public final class HIDController {
         peripheral.send(id, data)
     }
 
-    public func moveBy(dx: Int8, dy: Int8) {
-        sendMouse(MouseReport(dX: dx, dY: dy))
+    /// Absolute pointer reports always carry a position, so button changes resend the last one.
+    public func pointTo(x: UInt16, y: UInt16) {
+        pointerX = x
+        pointerY = y
+        sendPointer()
     }
 
     public func click(button: MouseButtons = .left) async {
-        sendMouse(MouseReport(buttons: button))
+        press(button: button)
         try? await Task.sleep(nanoseconds: 40_000_000)
-        sendMouse(.zero)
+        release()
     }
 
     public func press(button: MouseButtons = .left) {
-        sendMouse(MouseReport(buttons: button))
+        heldButtons.insert(button)
+        sendPointer()
     }
 
     public func release() {
-        sendMouse(.zero)
+        heldButtons = []
+        sendPointer()
+    }
+
+    private func sendPointer() {
+        sendMouse(MouseReport(buttons: heldButtons, x: pointerX, y: pointerY))
     }
 
     public func tapKey(_ key: Keycode, modifiers: KeyboardModifiers = []) async {

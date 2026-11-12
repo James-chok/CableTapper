@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000007 /* CableTapperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* CableTapperApp.swift */; };
 		A10000000000000000000008 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* ContentView.swift */; };
+		A1000000000000000000001F /* MirrorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* MirrorView.swift */; };
 		A10000000000000000000018 /* CableTapperCore in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000015 /* CableTapperCore */; };
 		A10000000000000000000019 /* CableTapperMCP in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000016 /* CableTapperMCP */; };
 		A1000000000000000000001A /* BTHIDKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000017 /* BTHIDKit */; };
@@ -18,6 +19,7 @@
 /* Begin PBXFileReference section */
 		A10000000000000000000005 /* CableTapperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CableTapperApp.swift; sourceTree = "<group>"; };
 		A10000000000000000000006 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A1000000000000000000001E /* MirrorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorView.swift; sourceTree = "<group>"; };
 		A1000000000000000000000C /* CableTapper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CableTapper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000001D /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -49,6 +51,7 @@
 			children = (
 				A10000000000000000000005 /* CableTapperApp.swift */,
 				A10000000000000000000006 /* ContentView.swift */,
+				A1000000000000000000001E /* MirrorView.swift */,
 				A1000000000000000000001D /* AppIcon.icon */,
 			);
 			path = CableTapperApp;
@@ -136,6 +139,7 @@
 			files = (
 				A10000000000000000000007 /* CableTapperApp.swift in Sources */,
 				A10000000000000000000008 /* ContentView.swift in Sources */,
+				A1000000000000000000001F /* MirrorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

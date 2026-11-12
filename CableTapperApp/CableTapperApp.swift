@@ -32,14 +32,20 @@ struct CableTapperApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(
-                model: model,
-                peripheral: model.session.hid.peripheral,
-                central: model.central
-            )
-            .frame(minWidth: 420, minHeight: 520)
+            HStack(alignment: .top, spacing: 0) {
+                ContentView(
+                    model: model,
+                    peripheral: model.session.hid.peripheral,
+                    central: model.central
+                )
+                .frame(minWidth: 420, idealWidth: 460, maxWidth: 480, maxHeight: .infinity)
+                Divider()
+                MirrorView(session: model.session)
+                    .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(minWidth: 760, minHeight: 640)
             .task { await model.start() }
         }
-        .defaultSize(width: 480, height: 640)
+        .defaultSize(width: 960, height: 720)
     }
 }

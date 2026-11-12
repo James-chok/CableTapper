@@ -1,26 +1,23 @@
 import Foundation
 
-/// Soft AssistiveTouch cursor in screenshot pixel space.
+/// Maps screenshot pixels onto the absolute HID pointer range.
 public struct PointerModel: Sendable {
+    /// Last pointer position in screenshot pixels.
     public var x: Double
     public var y: Double
     public var width: Double
     public var height: Double
-    /// Approximate screenshot-pixels moved per HID relative unit.
-    public var pixelsPerHIDUnit: Double
 
     public init(
         x: Double = 0,
         y: Double = 0,
         width: Double = 591,
-        height: Double = 1280,
-        pixelsPerHIDUnit: Double = 2.5
+        height: Double = 1280
     ) {
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.pixelsPerHIDUnit = pixelsPerHIDUnit
     }
 
     public mutating func updateScreenSize(width: Double, height: Double) {
@@ -30,29 +27,15 @@ public struct PointerModel: Sendable {
         y = min(max(y, 0), self.height - 1)
     }
 
-    public mutating func apply(dx: Int8, dy: Int8) {
-        x = min(max(x + Double(dx) * pixelsPerHIDUnit, 0), width - 1)
-        y = min(max(y + Double(dy) * pixelsPerHIDUnit, 0), height - 1)
+    public func hidPoint(x: Double, y: Double) -> (x: UInt16, y: UInt16) {
+        (Self.axis(x, length: width), Self.axis(y, length: height))
     }
 
-    /// Split a pixel delta into HID Int8 chunks.
-    public func hidChunks(toX targetX: Double, toY targetY: Double) -> [(Int8, Int8)] {
-        var remainingX = (targetX - x) / pixelsPerHIDUnit
-        var remainingY = (targetY - y) / pixelsPerHIDUnit
-        var chunks: [(Int8, Int8)] = []
-        while abs(remainingX) > 0.5 || abs(remainingY) > 0.5 {
-            let stepX = clampInt8(remainingX)
-            let stepY = clampInt8(remainingY)
-            if stepX == 0 && stepY == 0 { break }
-            chunks.append((stepX, stepY))
-            remainingX -= Double(stepX)
-            remainingY -= Double(stepY)
-            if chunks.count > 400 { break }
-        }
-        return chunks
-    }
-
-    private func clampInt8(_ value: Double) -> Int8 {
-        Int8(max(-127, min(127, value.rounded())))
+    /// Targets pixel centres, so the first and last pixels both land inside the screen.
+    private static func axis(_ value: Double, length: Double) -> UInt16 {
+        let maximum = Double(MouseReport.maxCoordinate)
+        let clamped = min(max(value, 0), length - 1)
+        let scaled = (clamped + 0.5) / length * maximum
+        return UInt16(min(max(scaled.rounded(), 0), maximum))
     }
 }

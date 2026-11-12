@@ -32,7 +32,7 @@ flowchart LR
 | Channel | Transport | Role |
 | --- | --- | --- |
 | Screen | USB (CoreMediaIO / AVFoundation) | Live frames, JPEG screenshots, settle detection |
-| Touch / type | Bluetooth LE HID over GATT (HOGP) | Relative mouse + keyboard reports → AssistiveTouch |
+| Touch / type | Bluetooth LE HID over GATT (HOGP) | Absolute pointer + keyboard reports → AssistiveTouch |
 | Agents | Local MCP (`127.0.0.1:47801/mcp`) | Tools in the running app; mutating calls return a settled screenshot when USB is up |
 
 **Layout**
@@ -43,7 +43,7 @@ flowchart LR
 - `Sources/CableTapperCore` — session, capture, BLE HID, gestures, OCR, tool router
 - `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote)
 
-Absolute taps are mapped by tracking a soft cursor and sending relative HID moves (with a corner recalibration). Keep this one app running; it owns the Bluetooth session and the MCP listener.
+Taps map screenshot pixels straight onto an absolute HID pointer (X/Y `0…32767` across the portrait screen). Keep this one app running; it owns the Bluetooth session and the MCP listener.
 
 ## Requirements
 
@@ -87,5 +87,6 @@ Coordinates are screenshot pixels (origin top-left). Mutating tools return a set
 
 ## Notes
 
-- Absolute taps use relative HID mouse moves + AssistiveTouch; first tap recalibrates via the top-left corner.
+- The pointer is an absolute HID device driven through AssistiveTouch. An iPhone paired with an older CableTapper build must forget the device and pair again so it reads the new report map.
+- The absolute pointer is clamped to the screen, so swipes that start on the bezel are not possible.
 - Auto-enabling AssistiveTouch over USB lockdown is deferred.

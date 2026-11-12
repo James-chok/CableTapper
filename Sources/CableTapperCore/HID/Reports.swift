@@ -9,16 +9,19 @@ enum ReportID: UInt8 {
     case consumerControl = 6
 }
 
+/// Absolute pointer report. X and Y span the whole iPhone screen in portrait, `0...maxCoordinate`.
 public struct MouseReport: Sendable, Equatable {
+    public static let maxCoordinate: UInt16 = 32767
+
     public var buttons: MouseButtons = []
-    public var dX: Int8 = 0
-    public var dY: Int8 = 0
+    public var x: UInt16 = 0
+    public var y: UInt16 = 0
     public var wheel: Int8 = 0
 
-    public init(buttons: MouseButtons = [], dX: Int8 = 0, dY: Int8 = 0, wheel: Int8 = 0) {
+    public init(buttons: MouseButtons = [], x: UInt16 = 0, y: UInt16 = 0, wheel: Int8 = 0) {
         self.buttons = buttons
-        self.dX = dX
-        self.dY = dY
+        self.x = min(x, Self.maxCoordinate)
+        self.y = min(y, Self.maxCoordinate)
         self.wheel = wheel
     }
 
@@ -27,8 +30,10 @@ public struct MouseReport: Sendable, Equatable {
     public var data: Data {
         Data([
             buttons.rawValue,
-            UInt8(bitPattern: dX),
-            UInt8(bitPattern: dY),
+            UInt8(x & 0xFF),
+            UInt8(x >> 8),
+            UInt8(y & 0xFF),
+            UInt8(y >> 8),
             UInt8(bitPattern: wheel),
         ])
     }
