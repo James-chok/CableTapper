@@ -104,25 +104,7 @@ public enum MCPServerRuntime {
                 description: "Wait then return a settled screenshot",
                 inputSchema: schema(["ms": intProp("Milliseconds to wait")], required: [])
             ),
-            Tool(
-                name: "find_text",
-                description: "OCR the screen; optional query filter",
-                inputSchema: schema([
-                    "query": stringProp("Substring or exact line"),
-                    "exact": boolProp("Match whole line"),
-                ], required: [])
-            ),
             Tool(name: "tap", description: "Tap screenshot coordinates via Bluetooth AssistiveTouch", inputSchema: xy),
-            Tool(
-                name: "tap_text",
-                description: "OCR-find text and tap its center",
-                inputSchema: schema([
-                    "text": stringProp("Label to tap"),
-                    "exact": boolProp("Exact line match"),
-                    "index": intProp("Match index from top"),
-                    "settle_ms": intProp("Settle timeout"),
-                ], required: ["text"])
-            ),
             Tool(name: "double_tap", description: "Double-tap coordinates", inputSchema: xy),
             Tool(
                 name: "long_press",
@@ -176,12 +158,6 @@ public enum MCPServerRuntime {
             ),
             Tool(name: "home", description: "Go to Home Screen", inputSchema: emptyObject),
             Tool(name: "back", description: "Edge-swipe back", inputSchema: emptyObject),
-            Tool(name: "dismiss", description: "Dismiss sheets/keyboard with Escape", inputSchema: emptyObject),
-            Tool(
-                name: "open_app",
-                description: "Open an app via Spotlight by exact name",
-                inputSchema: schema(["name": stringProp("App name")], required: ["name"])
-            ),
         ]
     }
 
@@ -204,10 +180,6 @@ public enum MCPServerRuntime {
 
     private nonisolated static func intProp(_ description: String) -> Value {
         .object(["type": .string("integer"), "description": .string(description)])
-    }
-
-    private nonisolated static func boolProp(_ description: String) -> Value {
-        .object(["type": .string("boolean"), "description": .string(description)])
     }
 }
 

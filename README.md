@@ -21,12 +21,10 @@ flowchart LR
     Screen["ScreenCapture"]
     Gestures["GestureEngine"]
     HID["HIDController"]
-    OCR["VisionOCR"]
   end
   Screen -->|"USB CoreMediaIO"| iPhone["iPhone"]
   Gestures --> HID
   HID -->|"BLE HOGP"| iPhone
-  OCR --> Screen
 ```
 
 | Channel | Transport | Role |
@@ -40,7 +38,7 @@ flowchart LR
 - `CableTapper.xcodeproj` — macOS app (debug and release)
 - `CableTapperApp` — SwiftUI window
 - `Sources/CableTapperMCP` — loopback MCP server
-- `Sources/CableTapperCore` — session, capture, BLE HID, gestures, OCR, tool router
+- `Sources/CableTapperCore` — session, capture, BLE HID, gestures, tool router
 - `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote)
 
 Taps map screenshot pixels straight onto an absolute HID pointer (X/Y `0…32767` across the portrait screen). Keep this one app running; it owns the Bluetooth session and the MCP listener.
@@ -81,7 +79,7 @@ The app listens on `http://127.0.0.1:47801/mcp` while it is open.
 
 ## Tools
 
-`status`, `screenshot`, `wait`, `find_text`, `tap`, `tap_text`, `double_tap`, `long_press`, `drag`, `flick`, `type_text`, `press_key`, `home`, `back`, `dismiss`, `open_app`
+`status`, `screenshot`, `wait`, `tap`, `double_tap`, `long_press`, `drag`, `flick`, `type_text`, `press_key`, `home`, `back`
 
 Coordinates are screenshot pixels (origin top-left). Mutating tools return a settled JPEG when USB capture is available.
 

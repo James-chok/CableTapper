@@ -112,25 +112,6 @@ public final class GestureEngine {
         try await drag(fromX: 2, fromY: y, toX: pointer.width * 0.45, toY: y, durationMs: 350)
     }
 
-    public func dismiss() async throws {
-        try requireBluetooth()
-        await hid.tapKey(.escape)
-        try? await Task.sleep(nanoseconds: 80_000_000)
-        await hid.tapKey(.escape)
-    }
-
-    public func openApp(named name: String) async throws {
-        try requireBluetooth()
-        await hid.consumerTap(.acHome)
-        try? await Task.sleep(nanoseconds: 400_000_000)
-        // Spotlight: Cmd+Space on hardware keyboard for iOS
-        await hid.tapKey(.space, modifiers: .leftGUI)
-        try? await Task.sleep(nanoseconds: 450_000_000)
-        try await hid.typeASCII(name)
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        await hid.tapKey(.return)
-    }
-
     private func place(x: Double, y: Double) {
         pointer.x = min(max(x, 0), pointer.width - 1)
         pointer.y = min(max(y, 0), pointer.height - 1)

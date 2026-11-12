@@ -11,8 +11,8 @@ public struct PointerModel: Sendable {
     public init(
         x: Double = 0,
         y: Double = 0,
-        width: Double = 591,
-        height: Double = 1280
+        width: Double = 1,
+        height: Double = 1
     ) {
         self.x = x
         self.y = y
