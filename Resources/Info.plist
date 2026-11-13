@@ -28,7 +28,5 @@
 	<string>CableTapper advertises as a Bluetooth keyboard and pointer so it can tap and type on your iPhone.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>CableTapper captures your iPhone screen over USB for screenshots and agent control.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Microphone access may be requested with the USB screen capture stream; CableTapper does not record audio.</string>
 </dict>
 </plist>
