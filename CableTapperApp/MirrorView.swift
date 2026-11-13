@@ -15,19 +15,10 @@ struct MirrorView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            ZStack {
-                GeometryReader { proxy in
-                    CapturePreview(session: screen.captureSession)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .gesture(pointerGestures(in: proxy.size))
-                }
-                if let overlay = overlayText {
-                    placeholder(overlay.text, showsSpinner: overlay.showsSpinner, isError: overlay.isError)
-                }
-            }
-            .aspectRatio(9.0 / 19.5, contentMode: .fit)
-            .frame(maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            mirrorContent
+                .aspectRatio(9.0 / 19.5, contentMode: .fit)
+                .frame(maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
 
             statusLine
                 .frame(height: 16)
@@ -37,16 +28,29 @@ struct MirrorView: View {
         .task { await screen.maintain() }
     }
 
-    private var statusLine: some View {
-        Group {
-            if case .live(let width, let height) = screen.phase {
-                Text("\(width)x\(height)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(" ")
-                    .font(.caption)
+    /// The preview NSView draws above SwiftUI siblings on macOS, so show it or the placeholder, never both.
+    @ViewBuilder
+    private var mirrorContent: some View {
+        if let overlay = overlayText {
+            placeholder(overlay.text, showsSpinner: overlay.showsSpinner, isError: overlay.isError)
+        } else {
+            GeometryReader { proxy in
+                CapturePreview(session: screen.captureSession)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .gesture(pointerGestures(in: proxy.size))
             }
+        }
+    }
+
+    @ViewBuilder
+    private var statusLine: some View {
+        if case .live(let width, let height) = screen.phase {
+            Text("\(width)x\(height)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            Text(" ")
+                .font(.caption)
         }
     }
 
@@ -130,7 +134,7 @@ struct MirrorView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.black.opacity(0.82))
+        .background(.quaternary)
     }
 }
 
