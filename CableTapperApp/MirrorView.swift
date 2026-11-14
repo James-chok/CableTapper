@@ -99,11 +99,11 @@ struct MirrorView: View {
                     await session.mirrorDragEnded(startX: start?.x, startY: start?.y, x: end?.x, y: end?.y)
                 }
             }
-        let tap = SpatialTapGesture()
+        let tapGesture = SpatialTapGesture()
             .onEnded { value in
                 tap(at: value.location, in: viewSize)
             }
-        return drag.exclusively(before: tap)
+        return drag.exclusively(before: tapGesture)
     }
 
     private func tap(at location: CGPoint, in viewSize: CGSize) {
