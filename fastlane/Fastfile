@@ -4,11 +4,10 @@ require "shellwords"
 default_platform(:mac)
 
 TEAM_ID = "FL2S59F6Z6"
-APP_IDENTIFIER = "io.github.james-chok.cabletapper"
 KEYCHAIN_NAME = "fastlane_tmp_keychain"
 
 platform :mac do
-  desc "Build a sandboxed App Store package and upload it"
+  desc "Build a notarized Developer ID app and leave a zip in dist/"
   lane :release do
     tag = ENV.fetch("GITHUB_REF_NAME")
     UI.user_error!("This lane runs from a v* tag") unless tag.start_with?("v")
@@ -17,87 +16,91 @@ platform :mac do
 
     setup_ci(keychain_name: KEYCHAIN_NAME)
     import_signing
+    api_key = asc_api_key
 
-    profile_name = provisioning_profile_name(ENV.fetch("MAC_APPSTORE_PROFILE_PATH"))
-    install_provisioning_profile(path: ENV.fetch("MAC_APPSTORE_PROFILE_PATH"))
-    asc_api_key
-
-    xcconfig = release_xcconfig(version, build_number, profile_name)
-    pkg_path = build_app(
-      project: "CableTapper.xcodeproj",
-      scheme: "CableTapper",
-      configuration: "Release",
-      destination: "generic/platform=macOS",
-      export_method: "app-store",
-      export_team_id: TEAM_ID,
-      export_options: {
-        signingStyle: "manual",
-        signingCertificate: "Apple Distribution",
-        installerSigningCertificate: "Mac Installer Distribution",
-        provisioningProfiles: {
-          APP_IDENTIFIER => profile_name
-        }
-      },
-      xcconfig: xcconfig.path,
-      output_directory: "dist/appstore",
-      output_name: "CableTapper"
-    )
-
-    # Developer ID export, notarization, and the GitHub zip.
-    # One archive can feed both exports once this is restored; sign that archive
-    # with "Developer ID Application" and an empty provisioning profile specifier.
-    # app_path = build_app(
+    # App Store export and upload.
+    # Restoring this also needs the Apple Distribution certificate, the Mac
+    # Installer Distribution certificate, and the Mac App Store profile.
+    # Sign that archive with "Apple Distribution" and the CableTapper profile,
+    # and point the app target at Resources/CableTapperAppStore.entitlements.
+    # profile_name = provisioning_profile_name(ENV.fetch("MAC_APPSTORE_PROFILE_PATH"))
+    # install_provisioning_profile(path: ENV.fetch("MAC_APPSTORE_PROFILE_PATH"))
+    # pkg_path = build_app(
     #   project: "CableTapper.xcodeproj",
     #   scheme: "CableTapper",
     #   configuration: "Release",
     #   destination: "generic/platform=macOS",
-    #   export_method: "developer-id",
+    #   export_method: "app-store",
     #   export_team_id: TEAM_ID,
     #   export_options: {
     #     signingStyle: "manual",
-    #     signingCertificate: "Developer ID Application",
-    #     teamID: TEAM_ID
+    #     signingCertificate: "Apple Distribution",
+    #     installerSigningCertificate: "Mac Installer Distribution",
+    #     provisioningProfiles: {
+    #       "io.github.james-chok.cabletapper" => profile_name
+    #     }
     #   },
-    #   codesigning_identity: "Developer ID Application",
-    #   output_directory: "dist",
+    #   xcconfig: xcconfig.path,
+    #   output_directory: "dist/appstore",
     #   output_name: "CableTapper"
     # )
-    # notarize(package: app_path, print_log: true)
-    # FileUtils.rm_f("#{app_path}.zip")
-    # sh("spctl", "--assess", "--type", "execute", "--verbose=2", app_path)
-    # zip_path = File.expand_path("dist/CableTapper-#{tag}.zip")
-    # sh("ditto", "-c", "-k", "--keepParent", app_path, zip_path)
-    # sh("bash", "-c", "cd dist && shasum -a 256 #{File.basename(zip_path).shellescape} > #{File.basename(zip_path).shellescape}.sha256")
+    # upload_to_app_store(
+    #   pkg: pkg_path,
+    #   platform: "osx",
+    #   skip_metadata: true,
+    #   skip_screenshots: true,
+    #   skip_app_version_update: true,
+    #   force: true,
+    #   run_precheck_before_submit: false,
+    #   precheck_include_in_app_purchases: false
+    # )
 
-    # A Developer API key can upload the package, but it cannot create or edit
-    # the App Store version. That version has to already exist in App Store Connect.
-    upload_to_app_store(
-      pkg: pkg_path,
-      platform: "osx",
-      skip_metadata: true,
-      skip_screenshots: true,
-      skip_app_version_update: true,
-      force: true,
-      run_precheck_before_submit: false,
-      precheck_include_in_app_purchases: false
+    xcconfig = release_xcconfig(version, build_number)
+    app_path = build_app(
+      project: "CableTapper.xcodeproj",
+      scheme: "CableTapper",
+      configuration: "Release",
+      destination: "generic/platform=macOS",
+      export_method: "developer-id",
+      export_team_id: TEAM_ID,
+      export_options: {
+        signingStyle: "manual",
+        signingCertificate: "Developer ID Application",
+        teamID: TEAM_ID
+      },
+      skip_profile_detection: true,
+      xcconfig: xcconfig.path,
+      output_directory: "dist",
+      output_name: "CableTapper"
     )
+    notarize(package: app_path, api_key: api_key, print_log: true)
+    FileUtils.rm_f("#{app_path}.zip")
+    sh("spctl", "--assess", "--type", "execute", "--verbose=2", app_path)
+    zip_path = File.expand_path("dist/CableTapper-#{tag}.zip")
+    sh("ditto", "-c", "-k", "--keepParent", app_path, zip_path)
+    sh("bash", "-c", "cd dist && shasum -a 256 #{File.basename(zip_path).shellescape} > #{File.basename(zip_path).shellescape}.sha256")
   end
 end
 
-# Developer ID is only needed for the direct-download export commented out above.
-# "DEVELOPER_ID_P12_PATH" => "DEVELOPER_ID_P12_PASSWORD",
 def import_signing
-  {
-    "APPLE_DISTRIBUTION_P12_PATH" => "APPLE_DISTRIBUTION_P12_PASSWORD",
-    "MAC_INSTALLER_DISTRIBUTION_P12_PATH" => "MAC_INSTALLER_DISTRIBUTION_P12_PASSWORD"
-  }.each do |path_key, password_key|
-    import_certificate(
-      certificate_path: ENV.fetch(path_key),
-      certificate_password: ENV.fetch(password_key),
-      keychain_name: KEYCHAIN_NAME,
-      keychain_password: ""
-    )
-  end
+  import_certificate(
+    certificate_path: ENV.fetch("DEVELOPER_ID_P12_PATH"),
+    certificate_password: ENV.fetch("DEVELOPER_ID_P12_PASSWORD"),
+    keychain_name: KEYCHAIN_NAME,
+    keychain_password: ""
+  )
+  # App Store signing, used by the export commented out above.
+  # {
+  #   "APPLE_DISTRIBUTION_P12_PATH" => "APPLE_DISTRIBUTION_P12_PASSWORD",
+  #   "MAC_INSTALLER_DISTRIBUTION_P12_PATH" => "MAC_INSTALLER_DISTRIBUTION_P12_PASSWORD"
+  # }.each do |path_key, password_key|
+  #   import_certificate(
+  #     certificate_path: ENV.fetch(path_key),
+  #     certificate_password: ENV.fetch(password_key),
+  #     keychain_name: KEYCHAIN_NAME,
+  #     keychain_password: ""
+  #   )
+  # end
 end
 
 def asc_api_key
@@ -121,13 +124,11 @@ def provisioning_profile_name(profile_path)
   name.strip
 end
 
-def release_xcconfig(version, build_number, profile_name)
-  # gym passes this file to every target, including Swift packages. Signing identity,
-  # entitlements, and the sandbox flag stay on the app target. Only the profile name
-  # is injected, through a setting the app target alone reads.
+def release_xcconfig(version, build_number)
+  # gym passes this file to every target, including Swift packages. The signing
+  # identity stays on the app target so packages are not resigned.
   file = Tempfile.new(["release", ".xcconfig"])
   file.write(<<~XCCONFIG)
-    CABLETAPPER_PROFILE_SPECIFIER = #{profile_name}
     DEVELOPMENT_TEAM = #{TEAM_ID}
     MARKETING_VERSION = #{version}
     CURRENT_PROJECT_VERSION = #{build_number}
