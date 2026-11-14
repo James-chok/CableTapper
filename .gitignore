@@ -8,3 +8,12 @@ dist/
 *.dSYM/
 screenshots/
 .cursor/
+fastlane/report.xml
+fastlane/test_output
+fastlane/README.md
+fastlane/Preview.html
+vendor/bundle
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile

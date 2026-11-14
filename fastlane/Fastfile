@@ -1,0 +1,135 @@
+require "open3"
+require "shellwords"
+
+default_platform(:mac)
+
+TEAM_ID = "FL2S59F6Z6"
+APP_IDENTIFIER = "io.github.james-chok.cabletapper"
+KEYCHAIN_NAME = "fastlane_tmp_keychain"
+
+platform :mac do
+  desc "Build a sandboxed App Store package and upload it"
+  lane :release do
+    tag = ENV.fetch("GITHUB_REF_NAME")
+    UI.user_error!("This lane runs from a v* tag") unless tag.start_with?("v")
+    version = tag.delete_prefix("v")
+    build_number = ENV.fetch("GITHUB_RUN_NUMBER")
+
+    setup_ci(keychain_name: KEYCHAIN_NAME)
+    import_signing
+
+    profile_name = provisioning_profile_name(ENV.fetch("MAC_APPSTORE_PROFILE_PATH"))
+    install_provisioning_profile(path: ENV.fetch("MAC_APPSTORE_PROFILE_PATH"))
+    asc_api_key
+
+    xcconfig = release_xcconfig(version, build_number, "Apple Distribution", profile_name)
+    pkg_path = build_app(
+      project: "CableTapper.xcodeproj",
+      scheme: "CableTapper",
+      configuration: "Release",
+      destination: "generic/platform=macOS",
+      export_method: "app-store",
+      export_team_id: TEAM_ID,
+      export_options: {
+        signingStyle: "manual",
+        signingCertificate: "Apple Distribution",
+        provisioningProfiles: {
+          APP_IDENTIFIER => profile_name
+        }
+      },
+      codesigning_identity: "Apple Distribution",
+      xcconfig: xcconfig.path,
+      output_directory: "dist/appstore",
+      output_name: "CableTapper"
+    )
+
+    # Developer ID export, notarization, and the GitHub zip.
+    # One archive can feed both exports once this is restored; sign that archive
+    # with "Developer ID Application" and an empty provisioning profile specifier.
+    # app_path = build_app(
+    #   project: "CableTapper.xcodeproj",
+    #   scheme: "CableTapper",
+    #   configuration: "Release",
+    #   destination: "generic/platform=macOS",
+    #   export_method: "developer-id",
+    #   export_team_id: TEAM_ID,
+    #   export_options: {
+    #     signingStyle: "manual",
+    #     signingCertificate: "Developer ID Application",
+    #     teamID: TEAM_ID
+    #   },
+    #   codesigning_identity: "Developer ID Application",
+    #   output_directory: "dist",
+    #   output_name: "CableTapper"
+    # )
+    # notarize(package: app_path, print_log: true)
+    # FileUtils.rm_f("#{app_path}.zip")
+    # sh("spctl", "--assess", "--type", "execute", "--verbose=2", app_path)
+    # zip_path = File.expand_path("dist/CableTapper-#{tag}.zip")
+    # sh("ditto", "-c", "-k", "--keepParent", app_path, zip_path)
+    # sh("bash", "-c", "cd dist && shasum -a 256 #{File.basename(zip_path).shellescape} > #{File.basename(zip_path).shellescape}.sha256")
+
+    upload_to_app_store(
+      pkg: pkg_path,
+      platform: "osx",
+      skip_metadata: true,
+      skip_screenshots: true,
+      force: true,
+      run_precheck_before_submit: false,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end
+
+# Developer ID is only needed for the direct-download export commented out above.
+# "DEVELOPER_ID_P12_PATH" => "DEVELOPER_ID_P12_PASSWORD",
+def import_signing
+  {
+    "APPLE_DISTRIBUTION_P12_PATH" => "APPLE_DISTRIBUTION_P12_PASSWORD"
+  }.each do |path_key, password_key|
+    import_certificate(
+      certificate_path: ENV.fetch(path_key),
+      certificate_password: ENV.fetch(password_key),
+      keychain_name: KEYCHAIN_NAME,
+      keychain_password: ""
+    )
+  end
+end
+
+def asc_api_key
+  app_store_connect_api_key(
+    key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+    issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+    key_content: ENV.fetch("APP_STORE_CONNECT_KEY_P8_BASE64"),
+    is_key_content_base64: true,
+    duration: 1200,
+    in_house: false
+  )
+end
+
+def provisioning_profile_name(profile_path)
+  stdout, status = Open3.capture2("security", "cms", "-D", "-i", profile_path)
+  UI.user_error!("Could not read the provisioning profile") unless status.success?
+  plist_path = File.join(Dir.tmpdir, "appstore-profile.plist")
+  File.write(plist_path, stdout)
+  name, name_status = Open3.capture2("/usr/libexec/PlistBuddy", "-c", "Print :Name", plist_path)
+  UI.user_error!("Could not read the provisioning profile name") unless name_status.success?
+  name.strip
+end
+
+def release_xcconfig(version, build_number, identity, profile_name)
+  entitlements = File.expand_path("Resources/CableTapperAppStore.entitlements")
+  file = Tempfile.new(["release", ".xcconfig"])
+  file.write(<<~XCCONFIG)
+    CODE_SIGN_STYLE = Manual
+    CODE_SIGN_IDENTITY = #{identity}
+    DEVELOPMENT_TEAM = #{TEAM_ID}
+    CODE_SIGN_ENTITLEMENTS = #{entitlements}
+    ENABLE_APP_SANDBOX = YES
+    MARKETING_VERSION = #{version}
+    CURRENT_PROJECT_VERSION = #{build_number}
+    PROVISIONING_PROFILE_SPECIFIER = #{profile_name}
+  XCCONFIG
+  file.close
+  file
+end
