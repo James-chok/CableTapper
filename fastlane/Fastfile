@@ -33,6 +33,7 @@ platform :mac do
       export_options: {
         signingStyle: "manual",
         signingCertificate: "Apple Distribution",
+        installerSigningCertificate: "Mac Installer Distribution",
         provisioningProfiles: {
           APP_IDENTIFIER => profile_name
         }
@@ -84,7 +85,8 @@ end
 # "DEVELOPER_ID_P12_PATH" => "DEVELOPER_ID_P12_PASSWORD",
 def import_signing
   {
-    "APPLE_DISTRIBUTION_P12_PATH" => "APPLE_DISTRIBUTION_P12_PASSWORD"
+    "APPLE_DISTRIBUTION_P12_PATH" => "APPLE_DISTRIBUTION_P12_PASSWORD",
+    "MAC_INSTALLER_DISTRIBUTION_P12_PATH" => "MAC_INSTALLER_DISTRIBUTION_P12_PASSWORD"
   }.each do |path_key, password_key|
     import_certificate(
       certificate_path: ENV.fetch(path_key),
