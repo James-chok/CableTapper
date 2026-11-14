@@ -69,11 +69,14 @@ platform :mac do
     # sh("ditto", "-c", "-k", "--keepParent", app_path, zip_path)
     # sh("bash", "-c", "cd dist && shasum -a 256 #{File.basename(zip_path).shellescape} > #{File.basename(zip_path).shellescape}.sha256")
 
+    # A Developer API key can upload the package, but it cannot create or edit
+    # the App Store version. That version has to already exist in App Store Connect.
     upload_to_app_store(
       pkg: pkg_path,
       platform: "osx",
       skip_metadata: true,
       skip_screenshots: true,
+      skip_app_version_update: true,
       force: true,
       run_precheck_before_submit: false,
       precheck_include_in_app_purchases: false
