@@ -76,9 +76,12 @@ platform :mac do
     notarize(package: app_path, api_key: api_key, print_log: true)
     FileUtils.rm_f("#{app_path}.zip")
     sh("spctl", "--assess", "--type", "execute", "--verbose=2", app_path)
-    zip_path = File.expand_path("dist/CableTapper-#{tag}.zip")
+    # fastlane runs inside fastlane/, so a relative dist/ would miss the repo-root directory the release step uploads.
+    dist_dir = File.expand_path("../dist", __dir__)
+    zip_path = File.join(dist_dir, "CableTapper-#{tag}.zip")
+    sha_path = File.join(dist_dir, "CableTapper-#{tag}.sha256")
     sh("ditto", "-c", "-k", "--keepParent", app_path, zip_path)
-    sh("bash", "-c", "cd dist && shasum -a 256 #{File.basename(zip_path).shellescape} > #{File.basename(zip_path).shellescape}.sha256")
+    sh("bash", "-c", "cd #{dist_dir.shellescape} && shasum -a 256 #{File.basename(zip_path).shellescape} > #{File.basename(sha_path).shellescape}")
   end
 end
 
