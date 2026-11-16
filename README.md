@@ -46,13 +46,12 @@ Taps map screenshot pixels straight onto an absolute HID pointer (X/Y `0…32767
 ## Requirements
 
 - macOS 14+
-- Xcode / Swift 6.1+
 - iPhone on a USB cable, unlocked, Trust this computer
 - AssistiveTouch enabled on the iPhone (Settings → Accessibility → Touch → AssistiveTouch)
 
 ## Run
 
-Open `CableTapper.xcodeproj` and Run. Xcode builds `CableTapper.app`. Archive that same target to release.
+Download the [latest release](https://github.com/James-chok/CableTapper/releases/latest), unzip it, and open `CableTapper.app`.
 
 The window starts BLE advertising as **CableTapper**, lists connected hosts, and binds MCP. The mirror on the right shows the USB feed; click or drag on it to tap or drag on the iPhone.
 
@@ -64,6 +63,10 @@ On the iPhone:
 Recommended: use [nRF Connect](https://apps.apple.com/us/app/nrf-connect-for-mobile/id1054362403) on the iPhone instead. Its scanner shows the advertised name **CableTapper**, so you can tell it apart from the Mac's other Bluetooth services; connect from there and accept the pairing prompt.
 
 Quit other Mac apps that act as a Bluetooth keyboard for that phone.
+
+Connect Bluetooth:
+
+https://github.com/user-attachments/assets/d1a62d00-0d20-4100-82a4-56bc6e7f04a4
 
 ## MCP
 
@@ -78,6 +81,10 @@ The app listens on `http://127.0.0.1:47801/mcp` while it is open.
   }
 }
 ```
+
+Operate over MCP:
+
+https://github.com/user-attachments/assets/043f8a08-a2ff-4b17-9cfb-7f6e4185a19e
 
 ## Tools
 
