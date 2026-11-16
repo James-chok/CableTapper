@@ -1,6 +1,6 @@
 # CableTapper
 
-Mac → real iPhone bridge for AI agents (Zeptap-like).
+Mac → real iPhone bridge for AI agents.
 
 - **Screen** over USB (CoreMediaIO / AVFoundation)
 - **Touch & typing** over Bluetooth LE HID / HOGP (AssistiveTouch; via [BTHIDKit](https://github.com/jqssun/darwin-bt-remote))
@@ -8,40 +8,6 @@ Mac → real iPhone bridge for AI agents (Zeptap-like).
 - A small **SwiftUI** window to advertise, show connected hosts, and mirror the iPhone screen
 
 License: **AGPL-3.0** (required by BTHIDKit). See `LICENSE` and `NOTICE`.
-
-## Architecture
-
-Nothing is installed on the iPhone. Open **CableTapper.app**. It advertises as a Bluetooth keyboard/pointer, serves MCP at `http://127.0.0.1:47801/mcp`, and shows a window for BLE advertising, connected hosts, and a live mirror of the iPhone. Agents use the same process through MCP.
-
-```mermaid
-flowchart LR
-  Agent["Cursor / Claude / Codex"] -->|"MCP HTTP"| App["CableTapper.app"]
-  App --> Core["CableTapperCore"]
-  subgraph core [CableTapperCore]
-    Screen["ScreenCapture"]
-    Gestures["GestureEngine"]
-    HID["HIDController"]
-  end
-  Screen -->|"USB CoreMediaIO"| iPhone["iPhone"]
-  Gestures --> HID
-  HID -->|"BLE HOGP"| iPhone
-```
-
-| Channel | Transport | Role |
-| --- | --- | --- |
-| Screen | USB (CoreMediaIO / AVFoundation) | Live frames, JPEG screenshots, settle detection |
-| Touch / type | Bluetooth LE HID over GATT (HOGP) | Absolute pointer + keyboard reports → AssistiveTouch |
-| Agents | Local MCP (`127.0.0.1:47801/mcp`) | Tools in the running app; mutating calls return a settled screenshot when USB is up |
-
-**Layout**
-
-- `CableTapper.xcodeproj` — macOS app (debug and release)
-- `CableTapperApp` — SwiftUI window and screen mirror
-- `Sources/CableTapperMCP` — loopback MCP server
-- `Sources/CableTapperCore` — session, capture, BLE HID, gestures, tool router
-- `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote)
-
-Taps map screenshot pixels straight onto an absolute HID pointer (X/Y `0…32767` across the portrait screen). Keep this one app running; it owns the Bluetooth session and the MCP listener.
 
 ## Requirements
 
@@ -66,7 +32,9 @@ Quit other Mac apps that act as a Bluetooth keyboard for that phone.
 
 Connect Bluetooth:
 
-https://github.com/user-attachments/assets/d1a62d00-0d20-4100-82a4-56bc6e7f04a4
+https://github.com/user-attachments/assets/ba3316a5-b189-4684-881e-99630363182c
+
+
 
 ## MCP
 
@@ -106,6 +74,40 @@ Coordinates are screenshot pixels (origin top-left). Every tool except `status` 
 | `back` | — | Swipe right from the left edge past mid-screen |
 
 Check the returned screenshot after `home` or `back`. If the page did not change, calling once more is safe for `home`; for `back`, make sure the first swipe really failed so you do not go back two levels.
+
+## Architecture
+
+Nothing is installed on the iPhone. Open **CableTapper.app**. It advertises as a Bluetooth keyboard/pointer, serves MCP at `http://127.0.0.1:47801/mcp`, and shows a window for BLE advertising, connected hosts, and a live mirror of the iPhone. Agents use the same process through MCP.
+
+```mermaid
+flowchart LR
+  Agent["Cursor / Claude / Codex"] -->|"MCP HTTP"| App["CableTapper.app"]
+  App --> Core["CableTapperCore"]
+  subgraph core [CableTapperCore]
+    Screen["ScreenCapture"]
+    Gestures["GestureEngine"]
+    HID["HIDController"]
+  end
+  Screen -->|"USB CoreMediaIO"| iPhone["iPhone"]
+  Gestures --> HID
+  HID -->|"BLE HOGP"| iPhone
+```
+
+| Channel | Transport | Role |
+| --- | --- | --- |
+| Screen | USB (CoreMediaIO / AVFoundation) | Live frames, JPEG screenshots, settle detection |
+| Touch / type | Bluetooth LE HID over GATT (HOGP) | Absolute pointer + keyboard reports → AssistiveTouch |
+| Agents | Local MCP (`127.0.0.1:47801/mcp`) | Tools in the running app; mutating calls return a settled screenshot when USB is up |
+
+**Layout**
+
+- `CableTapper.xcodeproj` — macOS app (debug and release)
+- `CableTapperApp` — SwiftUI window and screen mirror
+- `Sources/CableTapperMCP` — loopback MCP server
+- `Sources/CableTapperCore` — session, capture, BLE HID, gestures, tool router
+- `Vendor/BTHIDKit` — vendored [darwin-bt-remote](https://github.com/jqssun/darwin-bt-remote)
+
+Taps map screenshot pixels straight onto an absolute HID pointer (X/Y `0…32767` across the portrait screen). Keep this one app running; it owns the Bluetooth session and the MCP listener.
 
 ## Notes
 

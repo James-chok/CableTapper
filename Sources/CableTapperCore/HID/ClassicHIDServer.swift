@@ -5,7 +5,7 @@
     @preconcurrency import IOBluetooth
     import os
 
-    /// Bluetooth Classic HID device role: publish SDP, listen for incoming HID L2CAP (Zeptap-style).
+    /// Bluetooth Classic HID device role: publish SDP, listen for incoming HID L2CAP.
     /// iPhone pairs with the Mac's **computer Bluetooth name**, not "CableTapper".
     @MainActor
     public final class ClassicHIDServer: NSObject {
@@ -105,7 +105,7 @@
                 }
             }
 
-            // Private SPI used by Zeptap-like tools on newer macOS.
+            // Private SPI that toggles discoverable state on newer macOS.
             if let manager = classicManager() {
                 let sel = NSSelectorFromString("setBTDiscoverable:")
                 if manager.responds(to: sel) {
