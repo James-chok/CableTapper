@@ -105,14 +105,19 @@ public final class PhoneSession {
     }
 
     /// Settled screenshot for `screenshot` and `wait`. Always attaches a JPEG.
-    public func captureSettledScreenshot(settleMs: Int? = nil) async -> ToolResult {
+    public func captureSettledScreenshot(settleMs: Int? = nil, coordinates: Bool = false) async -> ToolResult {
         await serialized {
             do {
                 try await self.startScreen()
             } catch {
                 return .fail(error.localizedDescription)
             }
-            return await self.finishSettled(settleMs: settleMs, actionNote: nil, policy: .always)
+            return await self.finishSettled(
+                settleMs: settleMs,
+                actionNote: nil,
+                policy: .always,
+                coordinates: coordinates
+            )
         }
     }
 
@@ -122,20 +127,29 @@ public final class PhoneSession {
         settleMs: Int? = nil,
         actionNote: String,
         includeScreenshot: Bool = false,
+        coordinates: Bool = false,
         body: @escaping () async throws -> Void
     ) async -> ToolResult {
-        await serialized {
+        let policy: ShotPolicy = if coordinates {
+            .always
+        } else if includeScreenshot {
+            .ifChanged
+        } else {
+            .omit
+        }
+        return await serialized {
             // home and back measure from the pointer size, which stays in raw frame pixels.
             self.syncPointerScreenSize()
             do {
                 try await body()
             } catch {
-                return self.failureShot(error, policy: includeScreenshot ? .ifChanged : .omit)
+                return self.failureShot(error, policy: policy, coordinates: coordinates)
             }
             return await self.finishSettled(
                 settleMs: settleMs,
                 actionNote: actionNote,
-                policy: includeScreenshot ? .ifChanged : .omit
+                policy: policy,
+                coordinates: coordinates
             )
         }
     }
@@ -152,28 +166,36 @@ public final class PhoneSession {
     private func finishSettled(
         settleMs: Int?,
         actionNote: String?,
-        policy: ShotPolicy
+        policy: ShotPolicy,
+        coordinates: Bool
     ) async -> ToolResult {
         let settled: Bool
         do {
             settled = try await screen.waitUntilSettled(timeoutMs: settleMs ?? defaultSettleMs)
         } catch {
-            return self.failureShot(error, policy: policy)
+            return self.failureShot(error, policy: policy, coordinates: coordinates)
         }
         // Gesture mapping stays in raw frame pixels. The JPEG size is a smaller coordinate space.
         syncPointerScreenSize()
         guard policy != .omit else {
             return .ok(actionNote ?? "ok")
         }
-        return self.attachScreenshot(actionNote: actionNote, settled: settled, policy: policy, isError: false)
+        return self.attachScreenshot(
+            actionNote: actionNote,
+            settled: settled,
+            policy: policy,
+            coordinates: coordinates,
+            isError: false
+        )
     }
 
-    private func failureShot(_ error: Error, policy: ShotPolicy) -> ToolResult {
+    private func failureShot(_ error: Error, policy: ShotPolicy, coordinates: Bool) -> ToolResult {
         guard policy != .omit else { return .fail(error.localizedDescription) }
         return attachScreenshot(
             actionNote: error.localizedDescription,
             settled: false,
             policy: policy,
+            coordinates: coordinates,
             isError: true
         )
     }
@@ -182,6 +204,7 @@ public final class PhoneSession {
         actionNote: String?,
         settled: Bool,
         policy: ShotPolicy,
+        coordinates: Bool,
         isError: Bool
     ) -> ToolResult {
         let thumbnail = screen.currentThumbnail()
@@ -195,12 +218,15 @@ public final class PhoneSession {
             return isError ? .fail(text) : .ok(text)
         }
         do {
-            let shot = try screen.captureAgentJPEG(settled: settled)
+            let shot = try screen.captureAgentJPEG(settled: settled, coordinates: coordinates)
             if let thumbnail {
                 lastSentThumbnail = thumbnail
             }
             let settleNote = shot.settled ? "screen settled" : "screen still moving"
-            let line = "Screenshot \(shot.width)x\(shot.height) px. \(settleNote)."
+            var line = "Screenshot \(shot.width)x\(shot.height) px. \(settleNote)."
+            if coordinates {
+                line += " Coordinate grid every \(ScreenCapture.coordinateGridSpacing) px, origin top-left."
+            }
             let text = actionNote.map { "\($0)\n\(line)" } ?? line
             return isError ? .fail(text, jpeg: shot.jpegData) : .ok(text, jpeg: shot.jpegData)
         } catch {

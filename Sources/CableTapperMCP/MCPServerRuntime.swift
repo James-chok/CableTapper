@@ -101,13 +101,16 @@ public enum MCPServerRuntime {
             Tool(name: "status", description: "Bluetooth/USB status", inputSchema: emptyObject),
             Tool(
                 name: "screenshot",
-                description: "Capture a settled iPhone screenshot. Long edge is at most \(edge) px; other tools' coordinates use those pixels.",
-                inputSchema: emptyObject
+                description: "Capture a settled iPhone screenshot. Long edge is at most \(edge) px; other tools' coordinates use those pixels. Set coordinates to true to draw a labeled grid in that pixel space.",
+                inputSchema: schema(["coordinates": coordinateProp], required: [])
             ),
             Tool(
                 name: "wait",
                 description: "Wait, then return a settled screenshot",
-                inputSchema: schema(["ms": intProp("Milliseconds to wait")], required: [])
+                inputSchema: schema([
+                    "ms": intProp("Milliseconds to wait"),
+                    "coordinates": coordinateProp,
+                ], required: [])
             ),
             Tool(name: "tap", description: "Tap returned-screenshot coordinates via Bluetooth AssistiveTouch", inputSchema: xy),
             Tool(name: "double_tap", description: "Double-tap returned-screenshot coordinates", inputSchema: xy),
@@ -181,6 +184,7 @@ public enum MCPServerRuntime {
         copy["include_screenshot"] = boolProp(
             "When true, return a settled screenshot if the screen changed since the last image sent. Defaults to false."
         )
+        copy["coordinates"] = coordinateProp
         return copy
     }
 
@@ -190,6 +194,12 @@ public enum MCPServerRuntime {
 
     private nonisolated static func intProp(_ description: String) -> Value {
         .object(["type": .string("integer"), "description": .string(description)])
+    }
+
+    private nonisolated static var coordinateProp: Value {
+        boolProp(
+            "When true, draw a labeled grid every \(ScreenCapture.coordinateGridSpacing) px on the returned JPEG. Origin is top-left and the labels are tap coordinates. On mutating tools this also returns the JPEG. Defaults to false."
+        )
     }
 
     private nonisolated static func boolProp(_ description: String) -> Value {

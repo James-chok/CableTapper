@@ -60,11 +60,13 @@ Coordinates are pixels of the screenshot returned by `screenshot` or `wait` (ori
 
 Mutating tools accept `include_screenshot` (default false) and `settle_ms`, the maximum wait for the screen to stop changing (default 3000). They still wait for the screen to settle before returning. When `include_screenshot` is true, the tool returns a settled JPEG if the screen changed since the last image sent, or the text `screen unchanged` when it matches. `screenshot` and `wait` always return a JPEG.
 
+`screenshot`, `wait`, and mutating tools accept `coordinates` (default false). When true, the JPEG gets a labeled grid every 50 px, origin top-left. Those labels are the `x` and `y` values for the pointer tools. On a mutating tool, `coordinates` also returns the JPEG when the screen did not change.
+
 | Tool | Arguments | What it does |
 | --- | --- | --- |
 | `status` | — | Bluetooth, BLE host, and USB capture state |
-| `screenshot` | — | Settled screenshot |
-| `wait` | `ms` (default 1000, max 120000) | Sleep, then screenshot |
+| `screenshot` | `coordinates` (default false) | Settled screenshot. `coordinates` draws a labeled grid |
+| `wait` | `ms` (default 1000, max 120000), `coordinates` | Sleep, then screenshot |
 | `tap` | `x`, `y` | Single tap |
 | `double_tap` | `x`, `y` | Two taps 80 ms apart |
 | `long_press` | `x`, `y`, `duration_ms` (default 800) | Press and hold |
@@ -77,7 +79,7 @@ Mutating tools accept `include_screenshot` (default false) and `settle_ms`, the 
 
 To see whether `home` or `back` changed the page, set `include_screenshot` to true or call `screenshot`. If the page did not change, calling `home` once more is safe; for `back`, make sure the first swipe really failed so you do not go back two levels.
 
-Why the images are smaller, and the before/after timing, is in [docs/smaller-tool-results.md](docs/smaller-tool-results.md).
+Timing for the smaller images and the coordinate grid is in [docs/performance.md](docs/performance.md).
 
 ## Architecture
 

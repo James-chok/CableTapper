@@ -20,22 +20,27 @@ public final class ToolRouter {
         case "status":
             return .ok(self.session.statusText())
         case "screenshot":
-            return await self.session.captureSettledScreenshot()
+            return await self.session.captureSettledScreenshot(coordinates: coordinates(call.arguments))
         case "wait":
-            return await wait(ms: call.arguments["ms"]?.intValue ?? 1000)
+            return await wait(
+                ms: call.arguments["ms"]?.intValue ?? 1000,
+                coordinates: coordinates(call.arguments)
+            )
         case "tap":
             return await tap(
                 x: call.arguments["x"]?.intValue,
                 y: call.arguments["y"]?.intValue,
                 settleMs: call.arguments["settle_ms"]?.intValue,
-                includeScreenshot: includeScreenshot(call.arguments)
+                includeScreenshot: includeScreenshot(call.arguments),
+                coordinates: coordinates(call.arguments)
             )
         case "double_tap":
             return await doubleTap(
                 x: call.arguments["x"]?.intValue,
                 y: call.arguments["y"]?.intValue,
                 settleMs: call.arguments["settle_ms"]?.intValue,
-                includeScreenshot: includeScreenshot(call.arguments)
+                includeScreenshot: includeScreenshot(call.arguments),
+                coordinates: coordinates(call.arguments)
             )
         case "long_press":
             return await longPress(
@@ -43,7 +48,8 @@ public final class ToolRouter {
                 y: call.arguments["y"]?.intValue,
                 durationMs: call.arguments["duration_ms"]?.intValue ?? 800,
                 settleMs: call.arguments["settle_ms"]?.intValue,
-                includeScreenshot: includeScreenshot(call.arguments)
+                includeScreenshot: includeScreenshot(call.arguments),
+                coordinates: coordinates(call.arguments)
             )
         case "drag":
             return await drag(args: call.arguments)
@@ -53,7 +59,8 @@ public final class ToolRouter {
             return await typeText(
                 call.arguments["text"]?.stringValue,
                 settleMs: call.arguments["settle_ms"]?.intValue,
-                includeScreenshot: includeScreenshot(call.arguments)
+                includeScreenshot: includeScreenshot(call.arguments),
+                coordinates: coordinates(call.arguments)
             )
         case "press_key":
             return await pressKey(args: call.arguments)
@@ -61,7 +68,8 @@ public final class ToolRouter {
             return await self.session.withSettledScreenshot(
                 settleMs: call.arguments["settle_ms"]?.intValue,
                 actionNote: "home",
-                includeScreenshot: includeScreenshot(call.arguments)
+                includeScreenshot: includeScreenshot(call.arguments),
+                coordinates: coordinates(call.arguments)
             ) {
                 try await self.session.gestures.home()
             }
@@ -69,7 +77,8 @@ public final class ToolRouter {
             return await self.session.withSettledScreenshot(
                 settleMs: call.arguments["settle_ms"]?.intValue,
                 actionNote: "back",
-                includeScreenshot: includeScreenshot(call.arguments)
+                includeScreenshot: includeScreenshot(call.arguments),
+                coordinates: coordinates(call.arguments)
             ) {
                 try await self.session.gestures.back()
             }
@@ -78,42 +87,64 @@ public final class ToolRouter {
         }
     }
 
-    private func wait(ms: Int) async -> ToolResult {
+    private func wait(ms: Int, coordinates: Bool) async -> ToolResult {
         let clamped = min(max(ms, 0), 120_000)
         try? await Task.sleep(nanoseconds: UInt64(clamped) * 1_000_000)
-        return await self.session.captureSettledScreenshot()
+        return await self.session.captureSettledScreenshot(coordinates: coordinates)
     }
 
-    private func tap(x: Int?, y: Int?, settleMs: Int?, includeScreenshot: Bool) async -> ToolResult {
+    private func tap(
+        x: Int?,
+        y: Int?,
+        settleMs: Int?,
+        includeScreenshot: Bool,
+        coordinates: Bool
+    ) async -> ToolResult {
         guard let x, let y else { return .fail("tap requires x and y") }
         return await self.session.withSettledScreenshot(
             settleMs: settleMs,
             actionNote: "tap (\(x),\(y))",
-            includeScreenshot: includeScreenshot
+            includeScreenshot: includeScreenshot,
+            coordinates: coordinates
         ) {
             let point = try await self.preparePoint(x: x, y: y)
             try await self.session.gestures.tap(x: point.x, y: point.y)
         }
     }
 
-    private func doubleTap(x: Int?, y: Int?, settleMs: Int?, includeScreenshot: Bool) async -> ToolResult {
+    private func doubleTap(
+        x: Int?,
+        y: Int?,
+        settleMs: Int?,
+        includeScreenshot: Bool,
+        coordinates: Bool
+    ) async -> ToolResult {
         guard let x, let y else { return .fail("double_tap requires x and y") }
         return await self.session.withSettledScreenshot(
             settleMs: settleMs,
             actionNote: "double_tap (\(x),\(y))",
-            includeScreenshot: includeScreenshot
+            includeScreenshot: includeScreenshot,
+            coordinates: coordinates
         ) {
             let point = try await self.preparePoint(x: x, y: y)
             try await self.session.gestures.doubleTap(x: point.x, y: point.y)
         }
     }
 
-    private func longPress(x: Int?, y: Int?, durationMs: Int, settleMs: Int?, includeScreenshot: Bool) async -> ToolResult {
+    private func longPress(
+        x: Int?,
+        y: Int?,
+        durationMs: Int,
+        settleMs: Int?,
+        includeScreenshot: Bool,
+        coordinates: Bool
+    ) async -> ToolResult {
         guard let x, let y else { return .fail("long_press requires x and y") }
         return await self.session.withSettledScreenshot(
             settleMs: settleMs,
             actionNote: "long_press (\(x),\(y)) \(durationMs)ms",
-            includeScreenshot: includeScreenshot
+            includeScreenshot: includeScreenshot,
+            coordinates: coordinates
         ) {
             let point = try await self.preparePoint(x: x, y: y)
             try await self.session.gestures.longPress(x: point.x, y: point.y, durationMs: durationMs)
@@ -133,7 +164,8 @@ public final class ToolRouter {
         return await self.session.withSettledScreenshot(
             settleMs: args["settle_ms"]?.intValue,
             actionNote: "drag (\(fromX),\(fromY))->(\(toX),\(toY))",
-            includeScreenshot: includeScreenshot(args)
+            includeScreenshot: includeScreenshot(args),
+            coordinates: coordinates(args)
         ) {
             let from = try await self.preparePoint(x: fromX, y: fromY)
             let to = try await self.preparePoint(x: toX, y: toY)
@@ -157,19 +189,26 @@ public final class ToolRouter {
         return await self.session.withSettledScreenshot(
             settleMs: args["settle_ms"]?.intValue,
             actionNote: "flick \(dirRaw) from (\(x),\(y))",
-            includeScreenshot: includeScreenshot(args)
+            includeScreenshot: includeScreenshot(args),
+            coordinates: coordinates(args)
         ) {
             let point = try await self.preparePoint(x: x, y: y)
             try await self.session.gestures.flick(x: point.x, y: point.y, direction: direction)
         }
     }
 
-    private func typeText(_ text: String?, settleMs: Int?, includeScreenshot: Bool) async -> ToolResult {
+    private func typeText(
+        _ text: String?,
+        settleMs: Int?,
+        includeScreenshot: Bool,
+        coordinates: Bool
+    ) async -> ToolResult {
         guard let text else { return .fail("type_text requires text") }
         return await self.session.withSettledScreenshot(
             settleMs: settleMs,
             actionNote: "type_text",
-            includeScreenshot: includeScreenshot
+            includeScreenshot: includeScreenshot,
+            coordinates: coordinates
         ) {
             try self.session.gestures.requireBluetooth()
             try await self.session.hid.typeASCII(text)
@@ -186,7 +225,8 @@ public final class ToolRouter {
         return await self.session.withSettledScreenshot(
             settleMs: args["settle_ms"]?.intValue,
             actionNote: "press_key \(keyName)",
-            includeScreenshot: includeScreenshot(args)
+            includeScreenshot: includeScreenshot(args),
+            coordinates: coordinates(args)
         ) {
             try self.session.gestures.requireBluetooth()
             for _ in 0 ..< repeatCount {
@@ -198,6 +238,10 @@ public final class ToolRouter {
 
     private func includeScreenshot(_ args: [String: ToolValue]) -> Bool {
         args["include_screenshot"]?.boolValue ?? false
+    }
+
+    private func coordinates(_ args: [String: ToolValue]) -> Bool {
+        args["coordinates"]?.boolValue ?? false
     }
 
     /// Starts capture and maps returned-screenshot pixels onto the raw USB frame.

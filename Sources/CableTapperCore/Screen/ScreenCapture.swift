@@ -106,6 +106,8 @@ public final class ScreenCapture: NSObject, ObservableObject {
     /// Longest side of a screenshot returned to an agent.
     public nonisolated static let agentMaxLongEdge = 1000
     public nonisolated static let agentJPEGQuality: CGFloat = 0.5
+    /// Spacing of the optional coordinate grid, in returned-screenshot pixels.
+    public nonisolated static let coordinateGridSpacing = CoordinateGrid.spacing
 
     /// Returned-screenshot size for a raw USB frame. Frames already within the cap stay unchanged.
     public nonisolated static func agentPixelSize(rawWidth: Int, rawHeight: Int) -> (width: Int, height: Int) {
@@ -168,11 +170,14 @@ public final class ScreenCapture: NSObject, ObservableObject {
         return settled
     }
 
-    public func captureAgentJPEG(settled: Bool) throws -> Screenshot {
+    public func captureAgentJPEG(settled: Bool, coordinates: Bool = false) throws -> Screenshot {
         guard let image = latestImage else {
             throw CableTapperError.screenUnavailable("is the iPhone connected by USB and unlocked?")
         }
-        let scaled = Self.downscaledForAgent(image)
+        var scaled = Self.downscaledForAgent(image)
+        if coordinates {
+            scaled = CoordinateGrid.draw(on: scaled)
+        }
         let data = try Self.encodeJPEG(scaled, quality: Self.agentJPEGQuality)
         return Screenshot(jpegData: data, width: scaled.width, height: scaled.height, settled: settled)
     }
