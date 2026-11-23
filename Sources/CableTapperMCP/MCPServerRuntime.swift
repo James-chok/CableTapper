@@ -90,74 +90,74 @@ public enum MCPServerRuntime {
     }
 
     private nonisolated static var tools: [Tool] {
-        let xy = schema([
-            "x": intProp("X in screenshot pixels"),
-            "y": intProp("Y in screenshot pixels"),
-            "settle_ms": intProp("Max wait for screen settle"),
-        ], required: ["x", "y"])
+        let edge = ScreenCapture.agentMaxLongEdge
+        let xy = schema(shotOptions([
+            "x": intProp("X in returned-screenshot pixels (long edge at most \(edge))"),
+            "y": intProp("Y in returned-screenshot pixels (long edge at most \(edge))"),
+        ]), required: ["x", "y"])
+        let shot = schema(shotOptions([:]), required: [])
 
         return [
             Tool(name: "status", description: "Bluetooth/USB status", inputSchema: emptyObject),
-            Tool(name: "screenshot", description: "Capture settled iPhone screenshot over USB", inputSchema: emptyObject),
+            Tool(
+                name: "screenshot",
+                description: "Capture a settled iPhone screenshot. Long edge is at most \(edge) px; other tools' coordinates use those pixels.",
+                inputSchema: emptyObject
+            ),
             Tool(
                 name: "wait",
-                description: "Wait then return a settled screenshot",
+                description: "Wait, then return a settled screenshot",
                 inputSchema: schema(["ms": intProp("Milliseconds to wait")], required: [])
             ),
-            Tool(name: "tap", description: "Tap screenshot coordinates via Bluetooth AssistiveTouch", inputSchema: xy),
-            Tool(name: "double_tap", description: "Double-tap coordinates", inputSchema: xy),
+            Tool(name: "tap", description: "Tap returned-screenshot coordinates via Bluetooth AssistiveTouch", inputSchema: xy),
+            Tool(name: "double_tap", description: "Double-tap returned-screenshot coordinates", inputSchema: xy),
             Tool(
                 name: "long_press",
-                description: "Long-press coordinates",
-                inputSchema: schema([
-                    "x": intProp("X"),
-                    "y": intProp("Y"),
+                description: "Long-press returned-screenshot coordinates",
+                inputSchema: schema(shotOptions([
+                    "x": intProp("X in returned-screenshot pixels"),
+                    "y": intProp("Y in returned-screenshot pixels"),
                     "duration_ms": intProp("Hold duration"),
-                    "settle_ms": intProp("Settle timeout"),
-                ], required: ["x", "y"])
+                ]), required: ["x", "y"])
             ),
             Tool(
                 name: "drag",
-                description: "Drag from one point to another",
-                inputSchema: schema([
-                    "from_x": intProp("Start X"),
-                    "from_y": intProp("Start Y"),
-                    "to_x": intProp("End X"),
-                    "to_y": intProp("End Y"),
+                description: "Drag from one returned-screenshot point to another",
+                inputSchema: schema(shotOptions([
+                    "from_x": intProp("Start X in returned-screenshot pixels"),
+                    "from_y": intProp("Start Y in returned-screenshot pixels"),
+                    "to_x": intProp("End X in returned-screenshot pixels"),
+                    "to_y": intProp("End Y in returned-screenshot pixels"),
                     "duration_ms": intProp("Drag duration"),
-                    "settle_ms": intProp("Settle timeout"),
-                ], required: ["from_x", "from_y", "to_x", "to_y"])
+                ]), required: ["from_x", "from_y", "to_x", "to_y"])
             ),
             Tool(
                 name: "flick",
                 description: "Fast swipe with momentum",
-                inputSchema: schema([
-                    "x": intProp("Start X"),
-                    "y": intProp("Start Y"),
+                inputSchema: schema(shotOptions([
+                    "x": intProp("Start X in returned-screenshot pixels"),
+                    "y": intProp("Start Y in returned-screenshot pixels"),
                     "direction": stringProp("up|down|left|right"),
-                    "settle_ms": intProp("Settle timeout"),
-                ], required: ["x", "y", "direction"])
+                ]), required: ["x", "y", "direction"])
             ),
             Tool(
                 name: "type_text",
                 description: "Type US-keyboard ASCII into the focused field",
-                inputSchema: schema([
+                inputSchema: schema(shotOptions([
                     "text": stringProp("Text to type"),
-                    "settle_ms": intProp("Settle timeout"),
-                ], required: ["text"])
+                ]), required: ["text"])
             ),
             Tool(
                 name: "press_key",
                 description: "Press a key with optional modifiers",
-                inputSchema: schema([
+                inputSchema: schema(shotOptions([
                     "key": stringProp("enter|escape|backspace|tab|space|arrows|a|c|v|x|z"),
                     "modifiers": stringProp("comma-separated: command,shift,control,alternate"),
                     "repeat": intProp("Repeat count"),
-                    "settle_ms": intProp("Settle timeout"),
-                ], required: ["key"])
+                ]), required: ["key"])
             ),
-            Tool(name: "home", description: "Go to Home Screen", inputSchema: emptyObject),
-            Tool(name: "back", description: "Edge-swipe back", inputSchema: emptyObject),
+            Tool(name: "home", description: "Go to the Home Screen", inputSchema: shot),
+            Tool(name: "back", description: "Edge-swipe back", inputSchema: shot),
         ]
     }
 
@@ -174,12 +174,30 @@ public enum MCPServerRuntime {
         ])
     }
 
+    /// Optional settle wait and screenshot flag shared by mutating tools.
+    private nonisolated static func shotOptions(_ properties: [String: Value]) -> [String: Value] {
+        var copy = properties
+        copy["settle_ms"] = intProp("Max wait for the screen to settle, in milliseconds")
+        copy["include_screenshot"] = boolProp(
+            "When true, return a settled screenshot if the screen changed since the last image sent. Defaults to false."
+        )
+        return copy
+    }
+
     private nonisolated static func stringProp(_ description: String) -> Value {
         .object(["type": .string("string"), "description": .string(description)])
     }
 
     private nonisolated static func intProp(_ description: String) -> Value {
         .object(["type": .string("integer"), "description": .string(description)])
+    }
+
+    private nonisolated static func boolProp(_ description: String) -> Value {
+        .object([
+            "type": .string("boolean"),
+            "description": .string(description),
+            "default": .bool(false),
+        ])
     }
 }
 

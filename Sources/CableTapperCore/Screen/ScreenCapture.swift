@@ -1,5 +1,6 @@
 import AVFoundation
 @preconcurrency import Combine
+import CoreGraphics
 import CoreImage
 import CoreMediaIO
 import Foundation
@@ -7,6 +8,7 @@ import ImageIO
 
 public struct Screenshot: Sendable {
     public var jpegData: Data
+    /// Pixel size of the JPEG handed to the agent, after downscaling.
     public var width: Int
     public var height: Int
     public var settled: Bool
@@ -101,15 +103,48 @@ public final class ScreenCapture: NSObject, ObservableObject {
         resetCapture(phase: .searching)
     }
 
-    public func captureJPEG(quality: CGFloat = 0.7) throws -> Screenshot {
+    /// Longest side of a screenshot returned to an agent.
+    public nonisolated static let agentMaxLongEdge = 1000
+    public nonisolated static let agentJPEGQuality: CGFloat = 0.5
+
+    /// Returned-screenshot size for a raw USB frame. Frames already within the cap stay unchanged.
+    public nonisolated static func agentPixelSize(rawWidth: Int, rawHeight: Int) -> (width: Int, height: Int) {
+        guard rawWidth > 0, rawHeight > 0 else { return (1, 1) }
+        let longEdge = max(rawWidth, rawHeight)
+        guard longEdge > agentMaxLongEdge else { return (rawWidth, rawHeight) }
+        let scale = Double(agentMaxLongEdge) / Double(longEdge)
+        return (
+            max(Int((Double(rawWidth) * scale).rounded()), 1),
+            max(Int((Double(rawHeight) * scale).rounded()), 1)
+        )
+    }
+
+    public func agentPixelSize() -> (width: Int, height: Int) {
+        if let image = latestImage {
+            return Self.agentPixelSize(rawWidth: image.width, rawHeight: image.height)
+        }
+        return Self.agentPixelSize(rawWidth: frameSize.width, rawHeight: frameSize.height)
+    }
+
+    /// Maps a point in returned-screenshot pixels onto the raw USB frame.
+    /// Each axis uses its own length so rounding the two edges cannot skew the point.
+    public func rawPoint(agentX: Double, agentY: Double) throws -> (x: Double, y: Double) {
         guard let image = latestImage else {
             throw CableTapperError.screenUnavailable("is the iPhone connected by USB and unlocked?")
         }
-        let data = try Self.encodeJPEG(image, quality: quality)
-        return Screenshot(jpegData: data, width: image.width, height: image.height, settled: true)
+        let agent = Self.agentPixelSize(rawWidth: image.width, rawHeight: image.height)
+        let rawX = agentX / Double(agent.width) * Double(image.width)
+        let rawY = agentY / Double(agent.height) * Double(image.height)
+        return (rawX, rawY)
     }
 
-    public func waitForSettle(timeoutMs: Int = 3000) async throws -> Screenshot {
+    public func currentThumbnail() -> Data? {
+        guard let image = latestImage else { return nil }
+        return FrameSettle.thumbnailData(image)
+    }
+
+    /// Waits until consecutive frames stop changing. Returns whether the wait finished on a stable frame.
+    public func waitUntilSettled(timeoutMs: Int = 3000) async throws -> Bool {
         let timeout = Date().addingTimeInterval(Double(timeoutMs) / 1000.0)
         var previous: CGImage?
         var settled = false
@@ -127,16 +162,19 @@ public final class ScreenCapture: NSObject, ObservableObject {
             try? await Task.sleep(nanoseconds: 80_000_000)
         }
 
+        guard latestImage != nil else {
+            throw CableTapperError.screenUnavailable("is the iPhone connected by USB and unlocked?")
+        }
+        return settled
+    }
+
+    public func captureAgentJPEG(settled: Bool) throws -> Screenshot {
         guard let image = latestImage else {
             throw CableTapperError.screenUnavailable("is the iPhone connected by USB and unlocked?")
         }
-        let data = try Self.encodeJPEG(image, quality: 0.7)
-        return Screenshot(
-            jpegData: data,
-            width: image.width,
-            height: image.height,
-            settled: settled
-        )
+        let scaled = Self.downscaledForAgent(image)
+        let data = try Self.encodeJPEG(scaled, quality: Self.agentJPEGQuality)
+        return Screenshot(jpegData: data, width: scaled.width, height: scaled.height, settled: settled)
     }
 
     public func currentCGImage() -> CGImage? { latestImage }
@@ -288,6 +326,25 @@ public final class ScreenCapture: NSObject, ObservableObject {
             UInt32(MemoryLayout<UInt32>.size),
             &allow
         )
+    }
+
+    nonisolated static func downscaledForAgent(_ image: CGImage) -> CGImage {
+        let size = agentPixelSize(rawWidth: image.width, rawHeight: image.height)
+        if size.width == image.width, size.height == image.height { return image }
+        guard let ctx = CGContext(
+            data: nil,
+            width: size.width,
+            height: size.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return image
+        }
+        ctx.interpolationQuality = .medium
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+        return ctx.makeImage() ?? image
     }
 
     nonisolated static func encodeJPEG(_ image: CGImage, quality: CGFloat) throws -> Data {

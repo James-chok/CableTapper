@@ -16,6 +16,8 @@ public final class PhoneSession {
     private var dragWait: CheckedContinuation<Void, Never>?
     private var dragFinish: CheckedContinuation<Void, Never>?
     private var dragDone = true
+    /// Grayscale sample of the last JPEG actually attached to a tool result.
+    private var lastSentThumbnail: Data?
 
     public init(advertisedName: String = "CableTapper") {
         hid = HIDController(advertisedName: advertisedName)
@@ -102,34 +104,111 @@ public final class PhoneSession {
         await waitUntilDragFinished()
     }
 
+    /// Settled screenshot for `screenshot` and `wait`. Always attaches a JPEG.
+    public func captureSettledScreenshot(settleMs: Int? = nil) async -> ToolResult {
+        await serialized {
+            do {
+                try await self.startScreen()
+            } catch {
+                return .fail(error.localizedDescription)
+            }
+            return await self.finishSettled(settleMs: settleMs, actionNote: nil, policy: .always)
+        }
+    }
+
+    /// Runs a gesture, waits for the screen to settle, then optionally attaches a JPEG.
     @discardableResult
     public func withSettledScreenshot(
         settleMs: Int? = nil,
         actionNote: String,
+        includeScreenshot: Bool = false,
         body: @escaping () async throws -> Void
     ) async -> ToolResult {
         await serialized {
-            await self.settledScreenshot(settleMs: settleMs, actionNote: actionNote, body: body)
+            // home and back measure from the pointer size, which stays in raw frame pixels.
+            self.syncPointerScreenSize()
+            do {
+                try await body()
+            } catch {
+                return self.failureShot(error, policy: includeScreenshot ? .ifChanged : .omit)
+            }
+            return await self.finishSettled(
+                settleMs: settleMs,
+                actionNote: actionNote,
+                policy: includeScreenshot ? .ifChanged : .omit
+            )
         }
     }
 
-    private func settledScreenshot(
+    private enum ShotPolicy {
+        /// Text only. The settle wait still runs so the next coordinate is not chosen mid-animation.
+        case omit
+        /// Attach a JPEG only when the frame differs from the last image sent to the agent.
+        case ifChanged
+        /// Always attach a JPEG. Used when the agent asked to see the screen.
+        case always
+    }
+
+    private func finishSettled(
         settleMs: Int?,
-        actionNote: String,
-        body: @escaping () async throws -> Void
+        actionNote: String?,
+        policy: ShotPolicy
     ) async -> ToolResult {
+        let settled: Bool
         do {
-            try await body()
-            let shot = try await screen.waitForSettle(timeoutMs: settleMs ?? defaultSettleMs)
-            gestures.updateScreenSize(width: shot.width, height: shot.height)
-            let settleNote = shot.settled ? "screen settled" : "screen still moving"
-            return .ok(
-                "\(actionNote)\nScreenshot \(shot.width)x\(shot.height) px. \(settleNote).",
-                jpeg: shot.jpegData
-            )
+            settled = try await screen.waitUntilSettled(timeoutMs: settleMs ?? defaultSettleMs)
         } catch {
-            let jpeg = try? screen.captureJPEG().jpegData
-            return .fail(error.localizedDescription, jpeg: jpeg)
+            return self.failureShot(error, policy: policy)
+        }
+        // Gesture mapping stays in raw frame pixels. The JPEG size is a smaller coordinate space.
+        syncPointerScreenSize()
+        guard policy != .omit else {
+            return .ok(actionNote ?? "ok")
+        }
+        return self.attachScreenshot(actionNote: actionNote, settled: settled, policy: policy, isError: false)
+    }
+
+    private func failureShot(_ error: Error, policy: ShotPolicy) -> ToolResult {
+        guard policy != .omit else { return .fail(error.localizedDescription) }
+        return attachScreenshot(
+            actionNote: error.localizedDescription,
+            settled: false,
+            policy: policy,
+            isError: true
+        )
+    }
+
+    private func attachScreenshot(
+        actionNote: String?,
+        settled: Bool,
+        policy: ShotPolicy,
+        isError: Bool
+    ) -> ToolResult {
+        let thumbnail = screen.currentThumbnail()
+        let agent = screen.agentPixelSize()
+        if policy == .ifChanged,
+           let thumbnail,
+           let lastSentThumbnail,
+           FrameSettle.isSimilar(lastSentThumbnail, thumbnail) {
+            let line = "screen unchanged. coordinates \(agent.width)x\(agent.height)."
+            let text = actionNote.map { "\($0)\n\(line)" } ?? line
+            return isError ? .fail(text) : .ok(text)
+        }
+        do {
+            let shot = try screen.captureAgentJPEG(settled: settled)
+            if let thumbnail {
+                lastSentThumbnail = thumbnail
+            }
+            let settleNote = shot.settled ? "screen settled" : "screen still moving"
+            let line = "Screenshot \(shot.width)x\(shot.height) px. \(settleNote)."
+            let text = actionNote.map { "\($0)\n\(line)" } ?? line
+            return isError ? .fail(text, jpeg: shot.jpegData) : .ok(text, jpeg: shot.jpegData)
+        } catch {
+            if isError, let actionNote {
+                return .fail(actionNote)
+            }
+            let text = actionNote.map { "\($0)\n\(error.localizedDescription)" } ?? error.localizedDescription
+            return .fail(text)
         }
     }
 

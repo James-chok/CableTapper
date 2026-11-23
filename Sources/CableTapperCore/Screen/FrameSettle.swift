@@ -13,33 +13,35 @@ public enum FrameSettle {
         return score < threshold
     }
 
+    /// Grayscale sample used to decide whether the screen changed.
+    public static func thumbnailData(_ image: CGImage) -> Data? {
+        let width = min(image.width, 80)
+        let height = min(image.height, 140)
+        guard width > 0, height > 0 else { return nil }
+        guard let ctx = grayscaleContext(width: width, height: height) else { return nil }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pointer = ctx.data else { return nil }
+        return Data(UnsafeRawBufferPointer(start: pointer, count: width * height))
+    }
+
+    public static func isSimilar(_ previous: Data, _ current: Data, threshold: Double = 2.5) -> Bool {
+        meanAbsoluteDifference(previous, current) < threshold
+    }
+
     public static func meanAbsoluteDifference(_ a: CGImage, _ b: CGImage) -> Double {
-        let width = min(a.width, b.width, 80)
-        let height = min(a.height, b.height, 140)
-        guard width > 0, height > 0 else { return .greatestFiniteMagnitude }
-
-        guard
-            let ctxA = grayscaleContext(width: width, height: height),
-            let ctxB = grayscaleContext(width: width, height: height)
-        else {
+        guard let left = thumbnailData(a), let right = thumbnailData(b) else {
             return .greatestFiniteMagnitude
         }
+        return meanAbsoluteDifference(left, right)
+    }
 
-        ctxA.draw(a, in: CGRect(x: 0, y: 0, width: width, height: height))
-        ctxB.draw(b, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        guard let dataA = ctxA.data, let dataB = ctxB.data else {
-            return .greatestFiniteMagnitude
-        }
-
-        let ptrA = dataA.bindMemory(to: UInt8.self, capacity: width * height)
-        let ptrB = dataB.bindMemory(to: UInt8.self, capacity: width * height)
+    public static func meanAbsoluteDifference(_ a: Data, _ b: Data) -> Double {
+        guard a.count == b.count, !a.isEmpty else { return .greatestFiniteMagnitude }
         var sum = 0
-        let count = width * height
-        for i in 0 ..< count {
-            sum += abs(Int(ptrA[i]) - Int(ptrB[i]))
+        for index in 0 ..< a.count {
+            sum += abs(Int(a[index]) - Int(b[index]))
         }
-        return Double(sum) / Double(count)
+        return Double(sum) / Double(a.count)
     }
 
     private static func grayscaleContext(width: Int, height: Int) -> CGContext? {

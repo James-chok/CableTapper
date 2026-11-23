@@ -56,7 +56,9 @@ https://github.com/user-attachments/assets/043f8a08-a2ff-4b17-9cfb-7f6e4185a19e
 
 ## Tools
 
-Coordinates are screenshot pixels (origin top-left). Every tool except `status` returns a settled JPEG when USB capture is available. Mutating tools also accept `settle_ms`, the maximum wait for the screen to stop changing (default 3000).
+Coordinates are pixels of the screenshot returned by `screenshot` or `wait` (origin top-left). Those images are scaled so the long edge is at most 1000 px. Mutating tools take the same coordinates and scale them back onto the USB frame.
+
+Mutating tools accept `include_screenshot` (default false) and `settle_ms`, the maximum wait for the screen to stop changing (default 3000). They still wait for the screen to settle before returning. When `include_screenshot` is true, the tool returns a settled JPEG if the screen changed since the last image sent, or the text `screen unchanged` when it matches. `screenshot` and `wait` always return a JPEG.
 
 | Tool | Arguments | What it does |
 | --- | --- | --- |
@@ -73,7 +75,9 @@ Coordinates are screenshot pixels (origin top-left). Every tool except `status` 
 | `home` | — | Swipe up from the home-indicator strip to the Home Screen |
 | `back` | — | Swipe right from the left edge past mid-screen |
 
-Check the returned screenshot after `home` or `back`. If the page did not change, calling once more is safe for `home`; for `back`, make sure the first swipe really failed so you do not go back two levels.
+To see whether `home` or `back` changed the page, set `include_screenshot` to true or call `screenshot`. If the page did not change, calling `home` once more is safe; for `back`, make sure the first swipe really failed so you do not go back two levels.
+
+Why the images are smaller, and the before/after timing, is in [docs/smaller-tool-results.md](docs/smaller-tool-results.md).
 
 ## Architecture
 
@@ -97,7 +101,7 @@ flowchart LR
 | --- | --- | --- |
 | Screen | USB (CoreMediaIO / AVFoundation) | Live frames, JPEG screenshots, settle detection |
 | Touch / type | Bluetooth LE HID over GATT (HOGP) | Absolute pointer + keyboard reports → AssistiveTouch |
-| Agents | Local MCP (`127.0.0.1:47801/mcp`) | Tools in the running app; mutating calls return a settled screenshot when USB is up |
+| Agents | Local MCP (`127.0.0.1:47801/mcp`) | Tools in the running app. `screenshot` and `wait` return a settled JPEG; other tools return one only when `include_screenshot` is true and the screen changed |
 
 **Layout**
 
